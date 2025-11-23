@@ -2,7 +2,8 @@ export enum ViewState {
   HOME = 'HOME',
   LOBBY = 'LOBBY',
   GAME = 'GAME',
-  PROFILE = 'PROFILE'
+  PROFILE = 'PROFILE',
+  RULES = 'RULES'
 }
 
 export enum RoleType {

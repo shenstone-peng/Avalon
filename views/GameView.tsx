@@ -4,7 +4,7 @@ import { AVATARS, MISSION_CONFIG_5_PLAYERS } from '../constants';
 import { Button } from '../components/Button';
 import { RoleCard } from '../components/RoleCard';
 import { generateMissionStory, generateEndGameAnalysis } from '../services/geminiService';
-import { ScrollText, Swords, XCircle, CheckCircle, Crown, Eye, Gavel, ShieldAlert, HelpCircle, Skull } from 'lucide-react';
+import { ScrollText, Swords, XCircle, CheckCircle, Crown, Eye, EyeOff, Gavel, ShieldAlert, HelpCircle, Skull, User, Info } from 'lucide-react';
 
 interface Props {
   onNavigate: (view: ViewState) => void;
@@ -23,6 +23,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
   const [narrative, setNarrative] = useState<string>('');
   const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [showRole, setShowRole] = useState(false);
+  const [showVisionOnBoard, setShowVisionOnBoard] = useState(true); // Toggle for board icons
   const [manualWinner, setManualWinner] = useState<Alliance | null>(null);
 
   // Initialize Game
@@ -45,9 +46,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
 
     setMyPlayerId(newPlayers[0].id);
 
-    // 2. Assign Roles (Simplified 5-player setup: Merlin, Percival, Servant | Morgana, Assassin)
-    // Note: In a real app, Mordred/Oberon logic handles different vision rules. 
-    // Here we use a standard setup to demonstrate vision.
+    // 2. Assign Roles (Simplified 5-player setup)
     const roles: Role[] = [
         ROLES_CONFIG.MERLIN,
         ROLES_CONFIG.PERCIVAL,
@@ -90,32 +89,45 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
       const targetAlliance = target.role.alliance;
 
       // 1. 梅林 (Merlin)
-      // 看到：Morgana, Assassin, Minion, Oberon 為壞人
-      // 看不到：Mordred (顯示為好人/未知)
+      // 看到：Morgana, Assassin, Minion, Oberon 為壞人 (但看不到 Mordred)
       if (obsType === RoleType.MERLIN) {
           if (targetAlliance === Alliance.EVIL && targetType !== RoleType.MORDRED) {
-              return { icon: <Skull size={14} />, text: '邪惡陣營', type: 'evil' };
+              return { icon: <Skull size={16} />, text: '邪惡陣營', type: 'evil' };
           }
       }
 
       // 2. 派西維爾 (Percival)
-      // 看到：Merlin 和 Morgana 為「梅林？」(分不出來)
+      // 看到：Merlin 和 Morgana 為「梅林？」
       if (obsType === RoleType.PERCIVAL) {
           if (targetType === RoleType.MERLIN || targetType === RoleType.MORGANA) {
-              return { icon: <HelpCircle size={14} />, text: '梅林?', type: 'unknown' };
+              return { icon: <HelpCircle size={16} />, text: '梅林?', type: 'unknown' };
           }
       }
 
       // 3. 壞人視野 (Evil)
       // 看到：其他壞人 (除了 Oberon)
-      // Oberon：看不到隊友，隊友也看不到他
+      // Oberon 看不到隊友
       if (observer.role.alliance === Alliance.EVIL && obsType !== RoleType.OBERON) {
           if (targetAlliance === Alliance.EVIL && targetType !== RoleType.OBERON) {
-              return { icon: <Skull size={14} />, text: '同夥', type: 'evil' };
+              return { icon: <Skull size={16} />, text: '同夥', type: 'evil' };
           }
       }
 
       return null;
+  };
+
+  const getRoleDescription = (roleType: RoleType) => {
+      switch (roleType) {
+          case RoleType.MERLIN: return "你能看穿大部分邪惡陣營的偽裝（除了莫德雷德）。";
+          case RoleType.PERCIVAL: return "你能看到梅林與莫甘娜，但無法區分誰是真梅林。";
+          case RoleType.OBERON: return "你無法看到你的邪惡隊友，隊友也看不到你。";
+          case RoleType.MORDRED: 
+          case RoleType.MORGANA: 
+          case RoleType.ASSASSIN: 
+          case RoleType.MINION:
+              return "你能看到你的邪惡同夥（除了奧伯倫）。";
+          default: return "你沒有特殊視野，只能依靠信任與邏輯。";
+      }
   };
 
   // Bot Logic Helpers
@@ -145,7 +157,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
   const handleTeamSelection = (playerId: string) => {
       if (phase !== GamePhase.TEAM_SELECTION) return;
       const currentLeader = players[leaderIndex];
-      // Note: In local pass-and-play or simplified online, we might enforce leader only
+      // Allow only current leader to select
       if (currentLeader.id !== myPlayerId) return; 
 
       const required = rounds[currentRoundIndex].playersRequired;
@@ -194,7 +206,6 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
           setPhase(GamePhase.TEAM_SELECTION);
           setLeaderIndex((leaderIndex + 1) % players.length);
           setSelectedTeam([]);
-          // Show toast: Vote Failed
       }
   };
 
@@ -237,7 +248,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
             if (i === currentRoundIndex) {
                 return { ...r, status: isSuccess ? 'SUCCESS' : 'FAIL', missionResults: teamActions };
             }
-            if (i === currentRoundIndex + 1) {
+            if (i === currentRoundIndex + 1 && phase !== GamePhase.GAME_OVER && phase !== GamePhase.ASSASSINATION) {
                 return { ...r, status: 'CURRENT' };
             }
             return r;
@@ -247,13 +258,20 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
     };
 
     const nextRound = () => {
-        // Check auto win conditions (3 success or 3 fails)
+        // Check win conditions
         const successes = rounds.filter(r => r.status === 'SUCCESS').length;
         const fails = rounds.filter(r => r.status === 'FAIL').length;
 
-        if (successes >= 3 || fails >= 3) {
-            // Auto determine provisional winner, but let host confirm
-            setManualWinner(successes >= 3 ? Alliance.GOOD : Alliance.EVIL);
+        if (successes >= 3) {
+            // Good team wins missions -> Go to Assassination Phase
+            setPhase(GamePhase.ASSASSINATION);
+            setManualWinner(null); // Wait for host
+            return;
+        }
+
+        if (fails >= 3) {
+            // Evil team wins -> Host Confirm
+            setManualWinner(Alliance.EVIL);
             setPhase(GamePhase.GAME_OVER);
             return;
         }
@@ -294,11 +312,11 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
 
       return (
         <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4 animate-[fadeIn_0.5s]">
-            <h2 className="text-2xl font-cinzel text-amber-500 mb-4">確認你的身份</h2>
+            <h2 className="text-2xl font-cinzel text-amber-500 mb-6">確認你的身份</h2>
             
-            <div className="flex flex-col md:flex-row items-center gap-8 max-w-4xl w-full justify-center">
+            <div className="flex flex-col md:flex-row items-center gap-8 max-w-5xl w-full justify-center">
                 {/* My Card */}
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 transform hover:scale-105 transition-transform duration-300">
                     <RoleCard 
                         role={myPlayer.role || ROLES_CONFIG.LOYAL_SERVANT} 
                         isRevealed={showRole} 
@@ -306,51 +324,59 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                     />
                 </div>
 
-                {/* Vision Info Panel */}
-                {showRole && (
-                    <div className="w-full max-w-xs bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-xl animate-[slideInRight_0.5s]">
-                        <h3 className="font-cinzel text-lg text-slate-300 mb-4 flex items-center gap-2">
-                            <Eye size={18} />
-                            你的視野情報
-                        </h3>
-                        {visionList.length > 0 ? (
-                            <div className="space-y-3">
-                                {visionList.map((item, idx) => (
-                                    <div key={idx} className="flex items-center justify-between bg-slate-800 p-2 rounded border border-slate-700">
-                                        <div className="flex items-center gap-2">
-                                            <img src={item.player.avatar} className="w-8 h-8 rounded-full" alt="" />
-                                            <span className="text-sm text-slate-200">{item.player.name}</span>
+                {/* Vision Info Panel - Only visible when role is revealed or confirmed */}
+                <div className={`w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl transition-all duration-500 ${showRole ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none'}`}>
+                    <h3 className="font-cinzel text-xl text-slate-300 mb-2 flex items-center gap-2 border-b border-slate-700 pb-3">
+                        <Eye size={24} className="text-amber-500" />
+                        <span>視野情報</span>
+                    </h3>
+                    <p className="text-sm text-slate-400 mb-4 italic">
+                        {myPlayer.role ? getRoleDescription(myPlayer.role.type) : ''}
+                    </p>
+                    
+                    {visionList.length > 0 ? (
+                        <div className="space-y-4">
+                            {visionList.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700 hover:border-slate-500 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full border border-slate-500 overflow-hidden">
+                                            <img src={item.player.avatar} className="w-full h-full object-cover" alt="" />
                                         </div>
-                                        <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded
-                                            ${item.info?.type === 'evil' ? 'bg-red-900/50 text-red-400' : 'bg-amber-900/50 text-amber-400'}
-                                        `}>
-                                            {item.info?.icon}
-                                            {item.info?.text}
-                                        </div>
+                                        <span className="text-base text-slate-200 font-medium">{item.player.name}</span>
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-slate-500 text-sm italic">
-                                你的視野一片漆黑，你不知道誰是誰。<br/>
-                                (除非你是奧伯倫，或者是普通的忠臣)
-                            </p>
-                        )}
-                        <div className="mt-6 p-3 bg-indigo-900/20 rounded border border-indigo-500/30">
-                            <p className="text-xs text-indigo-300">
-                                <span className="font-bold">任務目標：</span>
-                                {myPlayer.role?.alliance === Alliance.GOOD 
-                                    ? "成功執行 3 個任務，並保護梅林不被刺殺。" 
-                                    : "破壞 3 個任務，或在最後刺殺梅林。"}
+                                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold shadow-sm
+                                        ${item.info?.type === 'evil' ? 'bg-red-950 text-red-400 border border-red-900' : 'bg-amber-950 text-amber-400 border border-amber-900'}
+                                    `}>
+                                        {item.info?.icon}
+                                        {item.info?.text}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 bg-slate-800/50 rounded-lg border border-slate-800 border-dashed">
+                            <Eye size={32} className="text-slate-600 mx-auto mb-2" />
+                            <p className="text-slate-500 italic">
+                                你的視野一片漆黑...<br/>
+                                <span className="text-xs mt-1 block">你無法確認任何人的身份</span>
                             </p>
                         </div>
+                    )}
+
+                    <div className="mt-6 p-4 bg-indigo-900/20 rounded border border-indigo-500/30">
+                        <h4 className="text-indigo-400 font-bold text-sm mb-1">獲勝條件</h4>
+                        <p className="text-sm text-indigo-300 leading-relaxed">
+                            {myPlayer.role?.alliance === Alliance.GOOD 
+                                ? "協助隊伍完成 3 個任務，並確保梅林不被刺客識破。" 
+                                : "破壞 3 個任務，或在任務失敗後找出並刺殺梅林。"}
+                        </p>
                     </div>
-                )}
+                </div>
             </div>
 
-            <div className="mt-8">
-                <Button onClick={() => setPhase(GamePhase.TEAM_SELECTION)} disabled={!showRole}>
-                    {showRole ? '開始遊戲' : '請先翻開卡片'}
+            <div className="mt-10">
+                <Button variant="gold" onClick={() => setPhase(GamePhase.TEAM_SELECTION)} disabled={!showRole} className="px-12 text-lg">
+                    {showRole ? '進入遊戲' : '請翻開卡片查看身份'}
                 </Button>
             </div>
         </div>
@@ -358,44 +384,53 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
   };
 
   const renderMissionReveal = () => (
-    <div className="fixed inset-0 z-50 bg-slate-900/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-[fadeIn_0.5s]">
+    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-[fadeIn_0.5s]">
         {isProcessingAI ? (
              <div className="animate-pulse flex flex-col items-center gap-4">
-                 <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                 <p className="font-cinzel text-amber-400">吟遊詩人正在撰寫史詩...</p>
+                 <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                 <p className="font-cinzel text-xl text-amber-400 tracking-widest">吟遊詩人正在撰寫史詩...</p>
              </div>
         ) : phase === GamePhase.GAME_OVER ? (
             // GAME OVER SCREEN
-            <div className="max-w-md w-full">
+            <div className="max-w-lg w-full relative">
                 <div className="mb-6 animate-[bounce_1s]">
-                    {manualWinner === Alliance.GOOD ? <Crown size={64} className="text-blue-400 mx-auto" /> : <Skull size={64} className="text-red-500 mx-auto" />}
+                    {manualWinner === Alliance.GOOD ? <Crown size={80} className="text-blue-400 mx-auto drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" /> : <Skull size={80} className="text-red-500 mx-auto drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]" />}
                 </div>
-                <h2 className={`text-5xl font-cinzel font-bold mb-2 ${manualWinner === Alliance.GOOD ? 'text-blue-400' : 'text-red-500'}`}>
+                <h2 className={`text-6xl font-cinzel font-bold mb-2 ${manualWinner === Alliance.GOOD ? 'text-blue-400' : 'text-red-500'}`}>
                     {manualWinner === Alliance.GOOD ? '正義獲勝' : '邪惡獲勝'}
                 </h2>
-                <p className="text-slate-400 mb-8 font-cinzel tracking-widest uppercase">Game Over</p>
                 
-                <div className="bg-slate-800 p-6 rounded-lg border border-slate-600 shadow-2xl mb-8 max-h-60 overflow-y-auto">
-                    <p className="font-serif text-slate-300 italic text-sm leading-relaxed text-left">
+                <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 shadow-2xl mb-8 max-h-60 overflow-y-auto">
+                    <p className="font-serif text-slate-300 italic text-lg leading-relaxed text-left">
                         {narrative || "歷史已經蓋棺論定。"}
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2">
-                    <Button variant="gold" onClick={() => onNavigate(ViewState.HOME)}>返回主頁</Button>
+                <div className="space-y-3">
+                    <Button variant="gold" fullWidth onClick={() => onNavigate(ViewState.HOME)}>返回主頁</Button>
+                    {/* Allow Host to change result if needed even after game over */}
+                    {myPlayerId === 'p0' && (
+                        <div className="pt-4 border-t border-slate-800">
+                             <p className="text-xs text-slate-500 mb-2">房主判定修正</p>
+                             <div className="flex gap-2 justify-center">
+                                 <button onClick={() => handleManualEndGame(Alliance.GOOD)} className="text-xs px-3 py-1 bg-blue-900 text-blue-300 rounded hover:bg-blue-800">改判正義勝</button>
+                                 <button onClick={() => handleManualEndGame(Alliance.EVIL)} className="text-xs px-3 py-1 bg-red-900 text-red-300 rounded hover:bg-red-800">改判邪惡勝</button>
+                             </div>
+                        </div>
+                    )}
                 </div>
             </div>
         ) : (
             // MISSION REVEAL SCREEN
-            <>
-                <h2 className={`text-4xl font-cinzel font-bold mb-6 ${rounds[currentRoundIndex].status === 'SUCCESS' ? 'text-blue-400' : 'text-red-500'}`}>
+            <div className="max-w-md w-full">
+                <h2 className={`text-5xl font-cinzel font-bold mb-8 ${rounds[currentRoundIndex].status === 'SUCCESS' ? 'text-blue-400' : 'text-red-500'}`}>
                     {rounds[currentRoundIndex].status === 'SUCCESS' ? '任務成功' : '任務失敗'}
                 </h2>
                 
-                <div className="bg-slate-800 p-6 rounded-lg border border-slate-600 max-w-md shadow-2xl">
-                    <div className="flex justify-center gap-4 mb-6">
+                <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 shadow-2xl mb-8">
+                    <div className="flex justify-center gap-4 mb-8">
                         {rounds[currentRoundIndex].missionResults.map((res, i) => (
-                            <div key={i} className={`p-3 rounded-full ${res === 'SUCCESS' ? 'bg-blue-900/50 text-blue-400' : 'bg-red-900/50 text-red-400'}`}>
+                            <div key={i} className={`p-4 rounded-full border-2 ${res === 'SUCCESS' ? 'bg-blue-950 border-blue-800 text-blue-400' : 'bg-red-950 border-red-800 text-red-400'}`}>
                                 {res === 'SUCCESS' ? <CheckCircle size={32} /> : <XCircle size={32} />}
                             </div>
                         ))}
@@ -408,9 +443,11 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                 </div>
 
                 <div className="mt-8">
-                    <Button variant="gold" onClick={nextRound}>繼續</Button>
+                    <Button variant="gold" fullWidth onClick={nextRound}>
+                        {rounds.filter(r => r.status === 'SUCCESS').length >= 3 || rounds.filter(r => r.status === 'FAIL').length >= 3 ? '查看最終結果' : '下一回合'}
+                    </Button>
                 </div>
-            </>
+            </div>
         )}
     </div>
   );
@@ -431,45 +468,65 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
   return (
     <div className="h-full flex flex-col relative overflow-hidden bg-slate-950">
        {/* Top Bar: Rounds Tracker */}
-       <div className="pt-4 px-2 pb-2 bg-slate-900/80 z-20 shadow-md">
-           <div className="flex justify-center gap-2">
+       <div className="pt-4 px-2 pb-2 bg-slate-900/90 border-b border-slate-800 z-20 shadow-lg">
+           <div className="flex justify-center gap-3">
                {rounds.map((r, i) => (
-                   <div key={i} className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all
-                        ${r.status === 'SUCCESS' ? 'bg-blue-600 border-blue-400 text-white' : 
-                          r.status === 'FAIL' ? 'bg-red-600 border-red-400 text-white' :
+                   <div key={i} className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all relative
+                        ${r.status === 'SUCCESS' ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 
+                          r.status === 'FAIL' ? 'bg-red-600 border-red-400 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]' :
                           r.status === 'CURRENT' ? 'bg-amber-500/20 border-amber-500 text-amber-500 animate-pulse' :
-                          'bg-slate-800 border-slate-600 text-slate-500'
+                          'bg-slate-800 border-slate-700 text-slate-600'
                         }
                    `}>
-                       {r.status === 'SUCCESS' ? <div className="w-2 h-2 bg-white rounded-full"/> : 
-                        r.status === 'FAIL' ? <div className="w-2 h-2 bg-black rounded-full"/> :
+                       {r.status === 'SUCCESS' ? <CheckCircle size={16} /> : 
+                        r.status === 'FAIL' ? <XCircle size={16} /> :
                         r.playersRequired}
                    </div>
                ))}
            </div>
-           <div className="text-center mt-2 text-xs text-slate-400 font-cinzel">
-               任務 {currentRoundIndex + 1} • 需 {rounds[currentRoundIndex].playersRequired} 人 • {rounds[currentRoundIndex].failsRequired} 失敗票
+           <div className="text-center mt-3 flex justify-center gap-4 text-[10px] text-slate-400 font-cinzel uppercase tracking-widest">
+               <span>Round {currentRoundIndex + 1}</span>
+               <span>•</span>
+               <span>Team Size: {rounds[currentRoundIndex].playersRequired}</span>
+               <span>•</span>
+               <span>Fails Needed: {rounds[currentRoundIndex].failsRequired}</span>
            </div>
        </div>
 
        {/* Game Board Area */}
        <div className="flex-1 relative mt-4">
            {/* Center Status */}
-           <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full border-4 border-amber-800 bg-amber-900/20 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center text-center p-2 backdrop-blur-sm z-0">
+           <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full border-4 border-amber-900/50 bg-slate-900/80 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center text-center p-4 backdrop-blur-sm z-0">
                {phase === GamePhase.TEAM_SELECTION && (
-                   <span className="text-amber-200 text-xs animate-bounce font-cinzel">等待隊長<br/>選擇隊伍</span>
+                   <>
+                        <Swords size={32} className="text-amber-600 mb-2 animate-pulse" />
+                        <span className="text-amber-200 text-sm font-cinzel">等待隊長<br/>選擇隊伍</span>
+                   </>
                )}
                {phase === GamePhase.VOTING && (
-                   <span className="text-white font-bold text-lg animate-pulse">投票中</span>
+                   <>
+                        <Gavel size={32} className="text-slate-300 mb-2 animate-bounce" />
+                        <span className="text-white font-bold text-lg">全員投票中</span>
+                   </>
                )}
                {phase === GamePhase.MISSION_EXECUTION && (
-                   <span className="text-red-300 font-bold text-lg">任務進行</span>
+                   <>
+                        <ShieldAlert size={32} className="text-red-400 mb-2 animate-pulse" />
+                        <span className="text-red-300 font-bold text-lg">任務執行中</span>
+                   </>
+               )}
+               {phase === GamePhase.ASSASSINATION && (
+                   <>
+                        <Skull size={40} className="text-red-600 mb-2 animate-pulse" />
+                        <span className="text-red-500 font-bold text-lg font-cinzel">刺客現身</span>
+                        <span className="text-xs text-red-300 mt-1">尋找梅林...</span>
+                   </>
                )}
                
                {/* Team selection indicators */}
-               <div className="flex flex-wrap justify-center gap-1 mt-2">
+               <div className="flex flex-wrap justify-center gap-1 mt-3">
                     {selectedTeam.map(id => (
-                        <div key={id} className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_10px_#fbbf24]"></div>
+                        <div key={id} className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_5px_#fbbf24]"></div>
                     ))}
                </div>
            </div>
@@ -487,48 +544,50 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                return (
                    <div 
                         key={p.id} 
-                        className={`absolute w-16 h-16 transition-all duration-300 -translate-x-1/2 -translate-y-1/2 cursor-pointer z-10
+                        className={`absolute w-20 h-20 transition-all duration-300 -translate-x-1/2 -translate-y-1/2 cursor-pointer z-10
                              ${isSelected ? 'scale-110' : ''}
                         `}
                         style={pos}
                         onClick={() => handleTeamSelection(p.id)}
                    >
                         {/* Avatar */}
-                        <div className={`w-full h-full rounded-full border-2 overflow-hidden relative shadow-lg bg-slate-800
-                             ${isSelected ? 'border-amber-400 ring-2 ring-amber-400/50' : 'border-slate-500'}
-                             ${isLeader ? 'ring-2 ring-purple-500' : ''}
+                        <div className={`w-full h-full rounded-full border-2 overflow-hidden relative shadow-2xl bg-slate-800
+                             ${isSelected ? 'border-amber-400 ring-4 ring-amber-400/30' : 'border-slate-600'}
+                             ${isLeader ? 'ring-2 ring-purple-500 border-purple-400' : ''}
                         `}>
                              <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" />
                              
-                             {/* Vision Overlay (Very important) */}
-                             {visionInfo && (
-                                 <div className={`absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]
-                                    ${visionInfo.type === 'evil' ? 'border-red-500' : 'border-amber-500'}
+                             {/* Vision Overlay on Board */}
+                             {visionInfo && showVisionOnBoard && (
+                                 <div className={`absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[1px] border-2
+                                    ${visionInfo.type === 'evil' ? 'border-red-500' : 'border-amber-400'}
+                                    rounded-full
                                  `}>
-                                     {visionInfo.type === 'evil' && <Skull size={24} className="text-red-500 animate-pulse" />}
-                                     {visionInfo.type === 'unknown' && <HelpCircle size={24} className="text-amber-400" />}
+                                     <div className="flex flex-col items-center">
+                                         {visionInfo.type === 'evil' && <Skull size={24} className="text-red-500 animate-pulse drop-shadow-md" />}
+                                         {visionInfo.type === 'unknown' && <HelpCircle size={24} className="text-amber-400 drop-shadow-md" />}
+                                     </div>
                                  </div>
                              )}
                         </div>
                         
-                        {/* Indicators */}
+                        {/* Leader Crown */}
                         {isLeader && (
-                            <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-purple-400 drop-shadow-md bg-slate-900 rounded-full p-0.5 border border-purple-900">
-                                <Crown size={16} fill="currentColor" />
+                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-purple-400 drop-shadow-[0_2px_10px_rgba(168,85,247,0.8)] z-20">
+                                <Crown size={24} fill="currentColor" strokeWidth={1} />
                             </div>
                         )}
 
-                        {/* Vote Result (Only show after voting) */}
-                        {/* Simplified: Show who voted what briefly or just status */}
+                        {/* Vote Result */}
                         {phase === GamePhase.VOTING && p.vote && (
-                             <div className="absolute -right-2 top-0 text-xs bg-slate-700 rounded-full p-1 border border-slate-500">
-                                 🗳️
+                             <div className="absolute -right-2 -top-2 w-6 h-6 flex items-center justify-center bg-slate-700 text-slate-200 rounded-full border border-slate-500 shadow-lg z-20">
+                                 <ScrollText size={12} />
                              </div>
                         )}
                         
                         {/* Name Label */}
-                        <div className={`absolute top-full left-1/2 -translate-x-1/2 px-2 py-0.5 rounded text-[10px] whitespace-nowrap mt-1 border
-                            ${isMe ? 'bg-amber-900/80 border-amber-700 text-amber-100' : 'bg-black/60 border-slate-700 text-slate-300'}
+                        <div className={`absolute top-full left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] whitespace-nowrap mt-2 border font-bold shadow-lg
+                            ${isMe ? 'bg-amber-600 border-amber-400 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}
                         `}>
                             {p.name}
                         </div>
@@ -537,37 +596,61 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
            })}
        </div>
 
-       {/* HOST CONTROLS (Only for Leader/Creator - p0) */}
-       {myPlayerId === 'p0' && phase !== GamePhase.GAME_OVER && (
-           <div className="absolute top-16 right-2 z-40 flex flex-col gap-2">
-               <button 
-                onClick={() => {
-                    if (confirm('確定要強制結束遊戲並判定正義陣營獲勝嗎？')) handleManualEndGame(Alliance.GOOD);
-                }}
-                className="p-2 bg-blue-900/80 rounded-full border border-blue-500 text-blue-200 hover:bg-blue-800 shadow-lg"
-                title="判定正義獲勝"
-               >
-                   <Gavel size={16} />
-               </button>
-               <button 
-                onClick={() => {
-                    if (confirm('確定要強制結束遊戲並判定邪惡陣營獲勝嗎？')) handleManualEndGame(Alliance.EVIL);
-                }}
-                className="p-2 bg-red-900/80 rounded-full border border-red-500 text-red-200 hover:bg-red-800 shadow-lg"
-                title="判定邪惡獲勝"
-               >
-                   <Gavel size={16} />
-               </button>
+       {/* HOST JUDGMENT PANEL (When Game is effectively done or Assassination) */}
+       {(phase === GamePhase.ASSASSINATION || (phase === GamePhase.GAME_OVER && manualWinner)) && myPlayerId === 'p0' && phase !== GamePhase.GAME_OVER && (
+           <div className="absolute bottom-36 left-0 w-full z-40 px-4 animate-[slideUp_0.5s]">
+               <div className="bg-slate-900/95 border border-amber-500/50 rounded-xl p-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-center">
+                   <h3 className="font-cinzel text-amber-500 font-bold text-lg mb-2 flex items-center justify-center gap-2">
+                       <Gavel size={20} /> 房主裁決時刻
+                   </h3>
+                   
+                   {phase === GamePhase.ASSASSINATION ? (
+                       <p className="text-slate-300 text-sm mb-4">
+                           正義陣營任務全勝。請確認刺客是否成功刺殺梅林？
+                       </p>
+                   ) : (
+                       <p className="text-slate-300 text-sm mb-4">
+                           遊戲條件已達成。請判定最終勝負。
+                       </p>
+                   )}
+
+                   <div className="grid grid-cols-2 gap-3">
+                        <button 
+                            onClick={() => handleManualEndGame(Alliance.EVIL)}
+                            className="bg-red-900/80 hover:bg-red-800 text-red-100 border border-red-600 py-3 rounded-lg font-bold flex flex-col items-center gap-1"
+                        >
+                            <span>⚔️ 刺殺成功</span>
+                            <span className="text-[10px] opacity-70">邪惡陣營獲勝</span>
+                        </button>
+                        <button 
+                            onClick={() => handleManualEndGame(Alliance.GOOD)}
+                            className="bg-blue-900/80 hover:bg-blue-800 text-blue-100 border border-blue-500 py-3 rounded-lg font-bold flex flex-col items-center gap-1"
+                        >
+                            <span>🛡️ 刺殺失敗</span>
+                            <span className="text-[10px] opacity-70">正義陣營獲勝</span>
+                        </button>
+                   </div>
+               </div>
+           </div>
+       )}
+       
+       {/* Waiting for Host Message (For non-hosts) */}
+       {(phase === GamePhase.ASSASSINATION) && myPlayerId !== 'p0' && (
+           <div className="absolute bottom-36 left-0 w-full z-40 px-4 text-center">
+               <div className="bg-black/60 backdrop-blur-md rounded-lg p-3 inline-block border border-slate-700">
+                   <p className="text-amber-400 animate-pulse font-cinzel">等待房主判定刺殺結果...</p>
+               </div>
            </div>
        )}
 
-       {/* Bottom Actions */}
-       <div className="bg-slate-900/90 backdrop-blur-md border-t border-slate-700 p-4 pb-safe z-30 min-h-[160px] flex flex-col justify-center">
+       {/* Bottom Actions Area */}
+       <div className="bg-slate-900/90 backdrop-blur-lg border-t border-slate-700 p-4 pb-safe z-30 min-h-[160px] flex flex-col justify-center shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
            <div className="max-w-md mx-auto w-full">
                {/* Team Selection Actions */}
                {phase === GamePhase.TEAM_SELECTION && players[leaderIndex].id === myPlayerId && (
                    <div className="flex flex-col gap-3 animate-[slideUp_0.3s]">
-                       <p className="text-center text-sm text-amber-500 font-bold">
+                       <p className="text-center text-sm text-amber-500 font-bold flex items-center justify-center gap-2">
+                           <Crown size={16} />
                            你是隊長，請選擇 {rounds[currentRoundIndex].playersRequired} 名隊員
                        </p>
                        <Button 
@@ -581,45 +664,64 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                    </div>
                )}
                {phase === GamePhase.TEAM_SELECTION && players[leaderIndex].id !== myPlayerId && (
-                   <p className="text-center text-slate-400">等待隊長 {players[leaderIndex].name} 進行決策...</p>
+                   <div className="text-center space-y-2 animate-pulse">
+                        <p className="text-slate-400 text-sm">等待隊長 {players[leaderIndex].name} 進行決策...</p>
+                        <div className="flex justify-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{animationDelay: '0s'}}></span>
+                            <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
+                            <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
+                        </div>
+                   </div>
                )}
 
                {/* Voting Actions */}
                {phase === GamePhase.VOTING && players.find(p => p.id === myPlayerId)?.vote === null && (
                    <div className="grid grid-cols-2 gap-4 animate-[slideUp_0.3s]">
-                       <Button variant="primary" onClick={() => handleVote('APPROVE')}>
-                           <CheckCircle size={18} className="mr-1"/> 贊成
+                       <Button variant="primary" onClick={() => handleVote('APPROVE')} className="bg-indigo-600 hover:bg-indigo-500">
+                           <CheckCircle size={20} className="mr-2"/> 贊成出發
                        </Button>
-                       <Button variant="danger" onClick={() => handleVote('REJECT')}>
-                           <XCircle size={18} className="mr-1"/> 否決
+                       <Button variant="danger" onClick={() => handleVote('REJECT')} className="bg-rose-700 hover:bg-rose-600">
+                           <XCircle size={20} className="mr-2"/> 否決提案
                        </Button>
                    </div>
                )}
                {phase === GamePhase.VOTING && players.find(p => p.id === myPlayerId)?.vote !== null && (
-                   <p className="text-center text-slate-400">已投票，等待其他人...</p>
+                   <p className="text-center text-slate-400 italic">已投票，等待其他人...</p>
                )}
 
                {/* Mission Actions */}
                {phase === GamePhase.MISSION_EXECUTION && selectedTeam.includes(myPlayerId) && players.find(p => p.id === myPlayerId)?.missionAction === null && (
                    <div className="animate-[slideUp_0.3s]">
-                        <p className="text-center text-sm text-slate-300 mb-2">請執行任務卡</p>
+                        <p className="text-center text-sm text-slate-300 mb-3 font-bold">請秘密執行任務卡</p>
                         <div className="grid grid-cols-2 gap-4">
-                            <Button variant="primary" onClick={() => handleMissionAction('SUCCESS')}>任務成功</Button>
+                            <Button variant="primary" onClick={() => handleMissionAction('SUCCESS')} className="h-16 text-lg bg-blue-700 border-blue-500">
+                                任務成功
+                            </Button>
                             {/* Only Evil can fail */}
                             {players.find(p => p.id === myPlayerId)?.role?.alliance === Alliance.EVIL ? (
-                                <Button variant="danger" onClick={() => handleMissionAction('FAIL')}>任務失敗</Button>
+                                <Button variant="danger" onClick={() => handleMissionAction('FAIL')} className="h-16 text-lg bg-red-700 border-red-500">
+                                    任務失敗
+                                </Button>
                             ) : (
-                                <Button variant="secondary" disabled className="opacity-50 cursor-not-allowed">
-                                    <span className="line-through">任務失敗</span>
+                                <Button variant="secondary" disabled className="h-16 opacity-40 cursor-not-allowed border-dashed">
+                                    <span className="line-through text-sm">任務失敗</span>
+                                    <span className="block text-[10px] text-slate-400">(好人無法失敗)</span>
                                 </Button>
                             )}
                         </div>
                    </div>
                )}
                {phase === GamePhase.MISSION_EXECUTION && (!selectedTeam.includes(myPlayerId) || players.find(p => p.id === myPlayerId)?.missionAction !== null) && (
-                   <div className="text-center space-y-2">
-                       <ShieldAlert size={32} className="mx-auto text-amber-600 animate-pulse" />
-                       <p className="text-slate-400">任務執行中，請保持肅靜...</p>
+                   <div className="text-center space-y-3">
+                       <ShieldAlert size={40} className="mx-auto text-amber-600 animate-pulse" />
+                       <p className="text-slate-400 font-cinzel">任務執行中，請保持肅靜...</p>
+                   </div>
+               )}
+               
+               {/* Assassination/Game Over placeholder for Bottom Bar */}
+               {(phase === GamePhase.ASSASSINATION || phase === GamePhase.GAME_OVER) && (
+                   <div className="text-center">
+                       <p className="text-slate-500 text-xs">Project Avalon</p>
                    </div>
                )}
            </div>
@@ -629,48 +731,79 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
        {(phase === GamePhase.MISSION_REVEAL || phase === GamePhase.GAME_OVER) && renderMissionReveal()}
 
        <button 
-        className="absolute top-4 left-4 p-2 bg-slate-800/80 rounded-full border border-slate-600 text-slate-400 z-50 hover:text-white"
+        className="absolute top-4 left-4 p-2.5 bg-slate-800/90 rounded-full border border-slate-600 text-slate-400 z-50 hover:text-white hover:bg-slate-700 transition-colors shadow-lg"
         onClick={() => { if(confirm('確定要離開遊戲？')) onNavigate(ViewState.HOME); }}
        >
-           <Swords size={16} />
+           <Swords size={20} />
        </button>
        
-       {/* Info Button */}
+       {/* Vision Toggle (On Board) */}
        <button
-        className="absolute top-4 right-14 p-2 bg-slate-800/80 rounded-full border border-slate-600 text-slate-400 z-50 hover:text-amber-400"
+        className={`absolute top-16 right-4 p-2.5 rounded-full border shadow-lg z-50 transition-all ${showVisionOnBoard ? 'bg-amber-600/90 text-white border-amber-400' : 'bg-slate-800/90 text-slate-400 border-slate-600'}`}
+        onClick={() => setShowVisionOnBoard(!showVisionOnBoard)}
+        title="切換視野標記"
+       >
+           {showVisionOnBoard ? <Eye size={18} /> : <EyeOff size={18} />}
+       </button>
+
+       {/* Identity & Vision Button */}
+       <button
+        className="absolute top-4 right-4 flex items-center gap-2 px-4 py-2 bg-indigo-600/90 hover:bg-indigo-500 text-indigo-100 rounded-full border border-indigo-400/50 shadow-lg z-50 transition-all active:scale-95 backdrop-blur-sm"
         onClick={() => setShowRole(true)}
        >
-           <Eye size={16} />
+           <User size={18} />
+           <span className="font-bold text-sm">身份與視野</span>
        </button>
        
-       {/* In-Game Role Peek Overlay */}
+       {/* In-Game Role & Vision Modal */}
        {showRole && (
-           <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center p-4" onClick={() => setShowRole(false)}>
-               <div onClick={e => e.stopPropagation()} className="relative">
-                    <RoleCard 
-                        role={myPlayer?.role || ROLES_CONFIG.LOYAL_SERVANT} 
-                        isRevealed={true} 
-                    />
-                    <div className="mt-4 bg-slate-800 p-4 rounded-lg border border-slate-700 max-w-xs mx-auto">
-                        <h4 className="text-amber-500 font-cinzel mb-2 border-b border-slate-600 pb-1">視野情報</h4>
-                        <ul className="text-xs text-slate-300 space-y-1">
+           <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-4 animate-[fadeIn_0.2s]" onClick={() => setShowRole(false)}>
+               <div onClick={e => e.stopPropagation()} className="relative max-w-sm w-full flex flex-col items-center">
+                    <div className="scale-90 origin-bottom">
+                        <RoleCard 
+                            role={myPlayer?.role || ROLES_CONFIG.LOYAL_SERVANT} 
+                            isRevealed={true} 
+                        />
+                    </div>
+                    
+                    <div className="mt-6 w-full bg-slate-900/90 p-5 rounded-xl border border-slate-600 backdrop-blur-xl shadow-2xl">
+                        <h4 className="text-amber-500 font-cinzel text-lg mb-2 border-b border-slate-700 pb-2 flex items-center gap-2">
+                            <Eye size={18} /> 視野情報
+                        </h4>
+                        
+                        <div className="mb-3 flex items-start gap-2 bg-slate-800/50 p-2 rounded text-xs text-slate-300">
+                             <Info size={14} className="mt-0.5 text-blue-400 flex-shrink-0" />
+                             <p>{myPlayer?.role ? getRoleDescription(myPlayer.role.type) : ''}</p>
+                        </div>
+
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                             {players.map(p => {
                                 const info = myPlayer ? getVisionInfo(myPlayer, p) : null;
                                 if (!info) return null;
                                 return (
-                                    <li key={p.id} className="flex justify-between">
-                                        <span>{p.name}:</span>
-                                        <span className={info.type === 'evil' ? 'text-red-400' : 'text-amber-400'}>{info.text}</span>
-                                    </li>
+                                    <div key={p.id} className="flex items-center justify-between bg-slate-800 p-2 rounded border border-slate-700">
+                                        <div className="flex items-center gap-2">
+                                            <img src={p.avatar} className="w-6 h-6 rounded-full" alt="" />
+                                            <span className="text-slate-300 text-sm">{p.name}</span>
+                                        </div>
+                                        <span className={`text-xs font-bold px-2 py-1 rounded flex items-center gap-1 ${info.type === 'evil' ? 'bg-red-900/50 text-red-400' : 'bg-amber-900/50 text-amber-400'}`}>
+                                            {info.icon} {info.text}
+                                        </span>
+                                    </div>
                                 );
                             })}
                             {!players.some(p => myPlayer && getVisionInfo(myPlayer, p)) && (
-                                <li className="italic text-slate-500">無特殊視野</li>
+                                <div className="text-center py-4 text-slate-500 italic text-sm">
+                                    此角色沒有可見的特殊身份資訊
+                                </div>
                             )}
-                        </ul>
+                        </div>
                     </div>
+                    
+                    <p className="text-slate-500 mt-6 text-sm flex items-center gap-2 animate-pulse">
+                        <User size={14} /> 點擊背景關閉
+                    </p>
                </div>
-               <p className="text-slate-500 mt-4 text-sm">點擊背景關閉</p>
            </div>
        )}
     </div>

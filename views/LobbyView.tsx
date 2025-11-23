@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ViewState, Player } from '../types';
 import { Button } from '../components/Button';
-import { ArrowLeft, Share2, Copy } from 'lucide-react';
+import { ArrowLeft, Share2, Copy, Check } from 'lucide-react';
 import { AVATARS } from '../constants';
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
 export const LobbyView: React.FC<Props> = ({ onNavigate }) => {
   const [players, setPlayers] = useState<Partial<Player>[]>([]);
   const [roomCode] = useState("AV-9527");
+  const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => {
     // Simulate players joining
@@ -31,6 +32,39 @@ export const LobbyView: React.FC<Props> = ({ onNavigate }) => {
     return () => clearInterval(interval);
   }, []);
 
+  const handleCopyCode = async () => {
+      try {
+          await navigator.clipboard.writeText(roomCode);
+          setCopiedCode(true);
+          setTimeout(() => setCopiedCode(false), 2000);
+      } catch (err) {
+          console.error('Failed to copy', err);
+      }
+  };
+
+  const handleInvite = async () => {
+      const inviteUrl = `${window.location.origin}?room=${roomCode}`;
+      const shareData = {
+          title: '王者圓桌 - 邀請函',
+          text: `👑 誠摯邀請您加入《王者圓桌》的對決！\n🔑 房間號碼：${roomCode}\n\n點擊下方連結立即加入：`,
+          url: inviteUrl
+      };
+
+      try {
+          // Try using Web Share API (Mobile friendly)
+          if (navigator.share) {
+              await navigator.share(shareData);
+          } else {
+              // Fallback to clipboard
+              const fullText = `${shareData.text}\n${inviteUrl}`;
+              await navigator.clipboard.writeText(fullText);
+              alert('✅ 邀請連結已複製到剪貼簿！\n快去分享給好友吧。');
+          }
+      } catch (err) {
+          console.error('Share failed:', err);
+      }
+  };
+
   return (
     <div className="flex flex-col h-screen pt-4 px-4 pb-24">
       <div className="flex items-center justify-between mb-8">
@@ -46,11 +80,20 @@ export const LobbyView: React.FC<Props> = ({ onNavigate }) => {
          <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">房間號碼</p>
          <div className="flex items-center justify-center gap-3">
              <span className="text-4xl font-mono text-amber-400 font-bold tracking-wider">{roomCode}</span>
-             <button className="text-slate-500 hover:text-amber-400 transition-colors"><Copy size={18} /></button>
+             <button 
+                onClick={handleCopyCode}
+                className="text-slate-500 hover:text-amber-400 transition-colors p-1"
+                title="複製房間號"
+             >
+                 {copiedCode ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
+             </button>
          </div>
          <div className="mt-4 flex justify-center">
-            <button className="flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300">
-                <Share2 size={14} /> 邀請好友
+            <button 
+                onClick={handleInvite}
+                className="flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-950/30 px-4 py-2 rounded-full border border-indigo-500/30 transition-all active:scale-95"
+            >
+                <Share2 size={14} /> 邀請好友 / 生成連結
             </button>
          </div>
       </div>
