@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HomeView } from './views/HomeView';
 import { GameView } from './views/GameView';
@@ -10,6 +11,16 @@ import { Swords, Shield, ScrollText, User } from 'lucide-react';
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.HOME);
   const [playerName, setPlayerName] = useState("亞瑟王候選人");
+
+  // Check for room code in URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomCode = params.get('room');
+    if (roomCode) {
+      console.log("偵測到房間連結:", roomCode);
+      setCurrentView(ViewState.LOBBY);
+    }
+  }, []);
 
   // Simple router based on state
   const renderView = () => {
@@ -39,7 +50,7 @@ export default function App() {
          {renderView()}
       </div>
 
-      {/* Mobile Sticky Navigation (Visible on non-game screens or if desired) */}
+      {/* Mobile Sticky Navigation */}
       {currentView !== ViewState.GAME && (
         <nav className="fixed bottom-0 left-0 w-full bg-slate-900/90 backdrop-blur-md border-t border-slate-700 z-50 pb-safe">
           <div className="flex justify-around items-center p-3">

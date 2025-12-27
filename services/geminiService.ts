@@ -3,6 +3,7 @@ import { Player, MissionRound } from "../types";
 
 // Helper to get client safely
 const getClient = () => {
+    // Note: process.env.API_KEY is defined in vite.config.ts via define
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
         console.warn("Gemini API Key is missing.");
@@ -16,15 +17,15 @@ export const generateMissionStory = async (
     team: Player[],
     success: boolean
 ): Promise<string> => {
-    const client = getClient();
-    if (!client) return "傳說已在風中消逝... (API Key Missing)";
+    const ai = getClient();
+    if (!ai) return "傳說已在風中消逝... (API Key Missing)";
 
     const teamNames = team.map(p => p.name).join(", ");
     const resultText = success ? "任務成功" : "任務失敗";
     const failCount = round.missionResults.filter(r => r === 'FAIL').length;
     
-    // Using a lighter model for faster narrative generation
-    const modelId = "gemini-2.5-flash"; 
+    // Using gemini-3-flash-preview as recommended for basic text tasks
+    const modelId = "gemini-3-flash-preview"; 
 
     const prompt = `
     你是一位中世紀奇幻風格的說書人（Game Master）。
@@ -40,7 +41,7 @@ export const generateMissionStory = async (
     `;
 
     try {
-        const response = await client.models.generateContent({
+        const response = await ai.models.generateContent({
             model: modelId,
             contents: prompt,
         });
@@ -56,12 +57,11 @@ export const generateEndGameAnalysis = async (
     players: Player[],
     missionHistory: MissionRound[]
 ): Promise<string> => {
-    const client = getClient();
-    if (!client) return "歷史的真相已不可考。";
+    const ai = getClient();
+    if (!ai) return "歷史的真相已不可考。";
 
-    const modelId = "gemini-2.5-flash";
+    const modelId = "gemini-3-flash-preview";
     
-    // Construct a brief summary of the game
     const playerRoles = players.map(p => `${p.name}(${p.role?.name})`).join(", ");
     
     const prompt = `
@@ -73,7 +73,7 @@ export const generateEndGameAnalysis = async (
     `;
 
     try {
-        const response = await client.models.generateContent({
+        const response = await ai.models.generateContent({
             model: modelId,
             contents: prompt,
         });
