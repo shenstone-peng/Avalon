@@ -28,7 +28,7 @@ export default function App() {
   const renderView = () => {
     switch (currentView) {
       case ViewState.HOME:
-        return <HomeView onNavigate={setCurrentView} />;
+        return <HomeView onNavigate={setCurrentView} playerName={playerName} onPlayerNameChange={setPlayerName} />;
       case ViewState.LOBBY:
         return <LobbyView onNavigate={setCurrentView} playerName={playerName} initialRoomCode={initialRoomCode} />;
       case ViewState.GAME:
@@ -38,7 +38,7 @@ export default function App() {
       case ViewState.RULES:
         return <RulesView onNavigate={setCurrentView} />;
       default:
-        return <HomeView onNavigate={setCurrentView} />;
+        return <HomeView onNavigate={setCurrentView} playerName={playerName} onPlayerNameChange={setPlayerName} />;
     }
   };
 
