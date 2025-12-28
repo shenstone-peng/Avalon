@@ -457,6 +457,7 @@ io.on('connection', (socket) => {
       if (game.selectedTeam.length !== round.playersRequired) return;
 
       round.selectedTeam = [...game.selectedTeam];
+      round.votes = {};
       game.phase = 'VOTING';
       for (const id of allPlayers(room)) game.players[id].vote = null;
       broadcastGameUpdate(room);
@@ -473,6 +474,10 @@ io.on('connection', (socket) => {
       if (!game.players[socket.id]) return;
       if (vote !== 'APPROVE' && vote !== 'REJECT') return;
       game.players[socket.id].vote = vote;
+
+      const round = game.rounds[game.currentRoundIndex];
+      round.votes = round.votes || {};
+      round.votes[socket.id] = vote;
 
       const ids = allPlayers(room);
       const allVoted = ids.every((id) => game.players[id]?.vote);

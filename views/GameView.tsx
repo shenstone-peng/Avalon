@@ -498,6 +498,9 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                const isSelected = selectedTeam.includes(p.id);
                const isLeader = i === leaderIndex;
                const isMe = p.id === myPlayerId;
+               const currentRound = rounds[currentRoundIndex];
+               const roundVote = currentRound?.votes?.[p.id] ?? p.vote ?? null;
+               const allVotesIn = Boolean(currentRound && players.length > 0 && players.every((pp) => Boolean(currentRound.votes?.[pp.id])));
 
                // Calculate Vision for current player relative to me
                const visionInfo = myPlayer ? getVisionInfo(myPlayer, p) : null;
@@ -549,10 +552,29 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                         )}
 
                         {/* Vote Result */}
-                        {phase === GamePhase.VOTING && p.vote && (
-                             <div className="absolute -right-2 -top-2 w-6 h-6 flex items-center justify-center bg-slate-700 text-slate-200 rounded-full border border-slate-500 shadow-lg z-20">
-                                 <ScrollText size={12} />
-                             </div>
+                        {(phase === GamePhase.VOTING || phase === GamePhase.MISSION_EXECUTION || phase === GamePhase.TEAM_SELECTION) && roundVote && (
+                            allVotesIn ? (
+                                <div
+                                    className={`absolute -right-2 -top-2 w-7 h-7 flex items-center justify-center rounded-full border shadow-lg z-20
+                                        ${roundVote === 'APPROVE'
+                                            ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                                            : 'bg-rose-950 text-rose-300 border-rose-700'
+                                        }
+                                    `}
+                                    title={roundVote === 'APPROVE' ? '贊成' : '否決'}
+                                >
+                                    {roundVote === 'APPROVE' ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                                </div>
+                            ) : (
+                                phase === GamePhase.VOTING ? (
+                                    <div
+                                        className="absolute -right-2 -top-2 w-7 h-7 flex items-center justify-center rounded-full border shadow-lg z-20 bg-slate-800 text-slate-200 border-slate-600"
+                                        title="已投票"
+                                    >
+                                        <ScrollText size={14} />
+                                    </div>
+                                ) : null
+                            )
                         )}
 
                         {/* Name Label */}

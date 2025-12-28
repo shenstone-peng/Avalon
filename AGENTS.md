@@ -220,3 +220,43 @@ npm run build
 - 房间与对局状态为内存存储：进程重启即丢失
 - 未做账号/鉴权：socket.id 即玩家身份
 - 断线重连会尽力恢复（通过 `get_game_state`），但跨重启无法恢复
+
+---
+
+## 11. 未来扩展：登录 + 排位/战绩（讨论记录）
+
+本项目当前不包含账号系统；若要加入「账号密码登录」并记录「每个角色的胜利记录/排位分」，需要引入 **持久化数据库**。
+
+### 11.1 为什么需要数据库
+
+- 账号密码登录必须持久化：`username`、`password_hash`（绝不存明文）
+- 战绩/排位必须跨重启保留：内存存储在 App Service 重启/休眠后会丢失
+
+### 11.2 Azure 建议（从 F1 到 Basic）
+
+- F1 适合演示：可能休眠、WebSocket 易断、进程重启后内存房间丢失
+- 升级到 Basic/Standard 后建议开启：**Always On** + **WebSockets: On**
+- 数据库建议使用独立服务（不要放在 Node 进程内存里）：
+  - 轻量且省心：Azure Database for PostgreSQL / Azure SQL
+
+### 11.3 最小实现方案（同事小圈子）
+
+- HTTP API：
+  - `POST /api/auth/register`（创建用户）
+  - `POST /api/auth/login`（登录返回 JWT）
+  - `GET /api/auth/me`（可选）
+- Socket.IO 鉴权：
+  - 客户端连接时携带 token：`io({ auth: { token } })`
+  - 服务端 middleware 校验后把 `socket.userId` 绑定到连接
+- 密码建议：`bcryptjs`（纯 JS，减少原生依赖坑）
+
+### 11.4 数据表建议（够用且方便统计）
+
+- `users`
+  - `id`, `username`(unique), `password_hash`, `created_at`
+- `matches`
+  - `id`, `room_code`, `started_at`, `ended_at`, `winner`('GOOD'|'EVIL'), `player_count`
+- `match_players`
+  - `match_id`, `user_id`, `role_key`, `alliance`, `won`(bool)
+
+按角色胜场统计示例：按 `role_key` 分组 `sum(won)`。
