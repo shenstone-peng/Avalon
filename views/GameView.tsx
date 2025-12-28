@@ -1,83 +1,98 @@
-import React, { useState, useEffect } from 'react';
-import { ViewState, GamePhase, Player, RoleType, Alliance, ROLES_CONFIG, MissionRound, Role } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ViewState, GamePhase, Player, RoleType, Alliance, ROLES_CONFIG, MissionRound } from '../types';
 import { AVATARS, MISSION_CONFIG_5_PLAYERS } from '../constants';
 import { Button } from '../components/Button';
 import { RoleCard } from '../components/RoleCard';
 import { generateMissionStory, generateEndGameAnalysis } from '../services/geminiService';
 import { ScrollText, Swords, XCircle, CheckCircle, Crown, Eye, EyeOff, Gavel, ShieldAlert, HelpCircle, Skull, User, Info } from 'lucide-react';
+import { getSocket, NetGameState } from '../services/socket';
 
 interface Props {
   onNavigate: (view: ViewState) => void;
   playerName: string;
+    initialRoomCode: string | null;
 }
 
-export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
-  // Game State
-  const [phase, setPhase] = useState<GamePhase>(GamePhase.SETUP);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [myPlayerId, setMyPlayerId] = useState<string>('');
-  const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
-  const [rounds, setRounds] = useState<MissionRound[]>([]);
-  const [leaderIndex, setLeaderIndex] = useState(0);
-  const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
-  const [narrative, setNarrative] = useState<string>('');
-  const [isProcessingAI, setIsProcessingAI] = useState(false);
-  const [showRole, setShowRole] = useState(false);
-  const [showVisionOnBoard, setShowVisionOnBoard] = useState(true); // Toggle for board icons
-  const [manualWinner, setManualWinner] = useState<Alliance | null>(null);
+export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomCode }) => {
+    const socket = useMemo(() => getSocket(), []);
+    const [roomCode, setRoomCode] = useState<string>('');
+    const [phase, setPhase] = useState<GamePhase>(GamePhase.SETUP);
+    const [players, setPlayers] = useState<Player[]>([]);
+    const [myPlayerId, setMyPlayerId] = useState<string>('');
+    const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
+    const [rounds, setRounds] = useState<MissionRound[]>([]);
+    const [leaderIndex, setLeaderIndex] = useState(0);
+    const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
+    const [narrative, setNarrative] = useState<string>('');
+    const [isProcessingAI, setIsProcessingAI] = useState(false);
+    const [showRole, setShowRole] = useState(false);
+    const [showVisionOnBoard, setShowVisionOnBoard] = useState(true);
+    const [manualWinner, setManualWinner] = useState<Alliance | null>(null);
+    const [roleAcked, setRoleAcked] = useState(false);
 
-  // Initialize Game
-  useEffect(() => {
-    initializeGame();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    useEffect(() => {
+        const codeFromUrl = initialRoomCode || new URLSearchParams(window.location.search).get('room');
+        if (codeFromUrl) setRoomCode(codeFromUrl);
+        setMyPlayerId(socket.id ?? '');
 
-  const initializeGame = () => {
-    // 1. Create Players
-    const newPlayers: Player[] = Array.from({ length: 5 }).map((_, i) => ({
-      id: `p${i}`,
-      name: i === 0 ? playerName : `玩家 ${i + 1}`, // Clean names
-      isLeader: i === 0, // Player starts as leader for demo
-      avatar: AVATARS[i],
-      isBot: i !== 0,
-      vote: null,
-      missionAction: null
-    }));
+        const onConnect = () => {
+            setMyPlayerId(socket.id ?? '');
+        };
 
-    setMyPlayerId(newPlayers[0].id);
+        const onGameState = (state: NetGameState) => {
+            setRoomCode(state.roomCode);
 
-    // 2. Assign Roles (Simplified 5-player setup)
-    const roles: Role[] = [
-        ROLES_CONFIG.MERLIN,
-        ROLES_CONFIG.PERCIVAL,
-        ROLES_CONFIG.LOYAL_SERVANT,
-        ROLES_CONFIG.MORGANA,
-        ROLES_CONFIG.ASSASSIN
-    ];
-    
-    // Shuffle roles
-    const shuffledRoles = roles.sort(() => Math.random() - 0.5);
-    newPlayers.forEach((p, i) => {
-        p.role = shuffledRoles[i];
-    });
+            const mappedPlayers: Player[] = state.players.map((p) => {
+                const role = p.roleKey ? (ROLES_CONFIG as any)[p.roleKey] : undefined;
+                return {
+                    id: p.id,
+                    name: p.name,
+                    avatar: AVATARS[p.avatarIndex % AVATARS.length],
+                    isLeader: p.isLeader,
+                    isBot: false,
+                    isHost: p.isHost,
+                    role,
+                    vote: p.vote,
+                    missionAction: p.missionAction,
+                };
+            });
 
-    setPlayers(newPlayers);
+            setPlayers(mappedPlayers);
+            setLeaderIndex(Math.max(0, state.leaderIndex));
+            setCurrentRoundIndex(state.currentRoundIndex);
+            setRounds(state.rounds as unknown as MissionRound[]);
+            setSelectedTeam(state.selectedTeam);
 
-    // 3. Setup Rounds
-    const newRounds: MissionRound[] = MISSION_CONFIG_5_PLAYERS.map((cfg, i) => ({
-      roundNumber: i + 1,
-      playersRequired: cfg.players,
-      failsRequired: cfg.fails,
-      status: i === 0 ? 'CURRENT' : 'PENDING',
-      selectedTeam: [],
-      votes: {},
-      missionResults: []
-    }));
-    setRounds(newRounds);
+            // Phase mapping
+            const phaseMap: Record<string, GamePhase> = {
+                ROLE_REVEAL: GamePhase.ROLE_REVEAL,
+                TEAM_SELECTION: GamePhase.TEAM_SELECTION,
+                VOTING: GamePhase.VOTING,
+                MISSION_EXECUTION: GamePhase.MISSION_EXECUTION,
+                MISSION_REVEAL: GamePhase.MISSION_REVEAL,
+                ASSASSINATION: GamePhase.ASSASSINATION,
+                GAME_OVER: GamePhase.GAME_OVER,
+            };
+            setPhase(phaseMap[state.phase] ?? GamePhase.SETUP);
 
-    // 4. Start
-    setPhase(GamePhase.ROLE_REVEAL);
-  };
+            if (state.manualWinner) {
+                setManualWinner(state.manualWinner === 'GOOD' ? Alliance.GOOD : Alliance.EVIL);
+            }
+        };
+
+        socket.on('game_state', onGameState);
+        socket.on('connect', onConnect);
+
+        // If user hits /game directly, try to join room (no-op if already in room).
+        if (codeFromUrl) {
+            socket.emit('join_room', { roomCode: codeFromUrl, name: playerName });
+        }
+
+        return () => {
+            socket.off('game_state', onGameState);
+            socket.off('connect', onConnect);
+        };
+    }, [initialRoomCode, playerName, socket]);
 
   // --- VISION LOGIC ---
   const getVisionInfo = (observer: Player, target: Player): { icon: React.ReactNode, text: string, type: 'evil' | 'good' | 'unknown' } | null => {
@@ -121,174 +136,61 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
           case RoleType.MERLIN: return "你能看穿大部分邪惡陣營的偽裝（除了莫德雷德）。";
           case RoleType.PERCIVAL: return "你能看到梅林與莫甘娜，但無法區分誰是真梅林。";
           case RoleType.OBERON: return "你無法看到你的邪惡隊友，隊友也看不到你。";
-          case RoleType.MORDRED: 
-          case RoleType.MORGANA: 
-          case RoleType.ASSASSIN: 
+          case RoleType.MORDRED:
+          case RoleType.MORGANA:
+          case RoleType.ASSASSIN:
           case RoleType.MINION:
               return "你能看到你的邪惡同夥（除了奧伯倫）。";
           default: return "你沒有特殊視野，只能依靠信任與邏輯。";
       }
   };
 
-  // Bot Logic Helpers
-  const simulateBotVotes = () => {
-     setPlayers(prev => prev.map(p => {
-         if (p.isBot) {
-             return { ...p, vote: Math.random() > 0.3 ? 'APPROVE' : 'REJECT' };
-         }
-         return p;
-     }));
-  };
-
-  const simulateBotMissionActions = (teamIds: string[]) => {
-      setPlayers(prev => prev.map(p => {
-          if (p.isBot && teamIds.includes(p.id)) {
-              const isEvil = p.role?.alliance === Alliance.EVIL;
-              // Evil bots fail most of the time
-              const action = (isEvil && Math.random() > 0.1) ? 'FAIL' : 'SUCCESS';
-              return { ...p, missionAction: action };
-          }
-          return p;
-      }));
-  };
-
-  // -- Phase Handlers --
+  // -- Multiplayer action emitters --
 
   const handleTeamSelection = (playerId: string) => {
-      if (phase !== GamePhase.TEAM_SELECTION) return;
-      const currentLeader = players[leaderIndex];
-      // Allow only current leader to select
-      if (currentLeader.id !== myPlayerId) return; 
-
-      const required = rounds[currentRoundIndex].playersRequired;
-      
-      setSelectedTeam(prev => {
-          if (prev.includes(playerId)) {
-              return prev.filter(id => id !== playerId);
-          }
-          if (prev.length < required) {
-              return [...prev, playerId];
-          }
-          return prev;
-      });
+    if (!roomCode) return;
+    socket.emit('select_team_toggle', { roomCode, playerId });
   };
 
   const submitTeam = () => {
-      setPhase(GamePhase.VOTING);
-      setPlayers(prev => prev.map(p => ({...p, vote: null})));
-      setTimeout(() => simulateBotVotes(), 1000);
+    if (!roomCode) return;
+    socket.emit('submit_team', { roomCode });
   };
 
   const handleVote = (vote: 'APPROVE' | 'REJECT') => {
-      setPlayers(prev => prev.map(p => p.id === myPlayerId ? { ...p, vote } : p));
-  };
-
-  // Check if all voted
-  useEffect(() => {
-      if (phase === GamePhase.VOTING) {
-          const allVoted = players.every(p => p.vote !== null);
-          if (allVoted) {
-              setTimeout(finalizeVotes, 1500);
-          }
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [players, phase]);
-
-  const finalizeVotes = () => {
-      const approves = players.filter(p => p.vote === 'APPROVE').length;
-      const rejects = players.filter(p => p.vote === 'REJECT').length;
-
-      if (approves > rejects) {
-          setPhase(GamePhase.MISSION_EXECUTION);
-          setPlayers(prev => prev.map(p => ({ ...p, missionAction: null })));
-          simulateBotMissionActions(selectedTeam);
-      } else {
-          setPhase(GamePhase.TEAM_SELECTION);
-          setLeaderIndex((leaderIndex + 1) % players.length);
-          setSelectedTeam([]);
-      }
+    if (!roomCode) return;
+    socket.emit('vote', { roomCode, vote });
   };
 
   const handleMissionAction = (action: 'SUCCESS' | 'FAIL') => {
-      setPlayers(prev => prev.map(p => p.id === myPlayerId ? { ...p, missionAction: action } : p));
+    if (!roomCode) return;
+    socket.emit('mission_action', { roomCode, action });
   };
 
-   // Check if all mission participants acted
-   useEffect(() => {
-    if (phase === GamePhase.MISSION_EXECUTION) {
-        const teamPlayers = players.filter(p => selectedTeam.includes(p.id));
-        const allActed = teamPlayers.every(p => p.missionAction !== null);
-        if (allActed && teamPlayers.length > 0) {
-            setTimeout(finalizeMission, 1500);
-        }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [players, phase]);
-
-    const finalizeMission = async () => {
-        const teamActions = players
-            .filter(p => selectedTeam.includes(p.id))
-            .map(p => p.missionAction as 'SUCCESS' | 'FAIL');
-        
-        const failCount = teamActions.filter(a => a === 'FAIL').length;
-        const requiredFails = rounds[currentRoundIndex].failsRequired;
-        const isSuccess = failCount < requiredFails;
-
-        // AI Story Generation
+  const nextRound = async () => {
+    if (!roomCode) return;
+    // Optional local story generation (cosmetic). In multiplayer, every client can generate its own.
+    // Keep existing UX without making server depend on Gemini API.
+    try {
+      const current = rounds[currentRoundIndex];
+      if (current && current.missionResults.length > 0) {
+        const teamObjs = players.filter((p) => selectedTeam.includes(p.id));
+        const failCount = current.missionResults.filter((r) => r === 'FAIL').length;
+        const isSuccess = failCount < current.failsRequired;
         setIsProcessingAI(true);
-        const teamObjs = players.filter(p => selectedTeam.includes(p.id));
-        const currentRound = { ...rounds[currentRoundIndex], missionResults: teamActions };
-        
-        const story = await generateMissionStory(currentRound, teamObjs, isSuccess);
+        const story = await generateMissionStory(current, teamObjs, isSuccess);
         setNarrative(story);
-        setIsProcessingAI(false);
-
-        // Update Round History
-        setRounds(prev => prev.map((r, i) => {
-            if (i === currentRoundIndex) {
-                return { ...r, status: isSuccess ? 'SUCCESS' : 'FAIL', missionResults: teamActions };
-            }
-            if (i === currentRoundIndex + 1 && phase !== GamePhase.GAME_OVER && phase !== GamePhase.ASSASSINATION) {
-                return { ...r, status: 'CURRENT' };
-            }
-            return r;
-        }));
-
-        setPhase(GamePhase.MISSION_REVEAL);
-    };
-
-    const nextRound = () => {
-        // Check win conditions
-        const successes = rounds.filter(r => r.status === 'SUCCESS').length;
-        const fails = rounds.filter(r => r.status === 'FAIL').length;
-
-        if (successes >= 3) {
-            // Good team wins missions -> Go to Assassination Phase
-            setPhase(GamePhase.ASSASSINATION);
-            setManualWinner(null); // Wait for host
-            return;
-        }
-
-        if (fails >= 3) {
-            // Evil team wins -> Host Confirm
-            setManualWinner(Alliance.EVIL);
-            setPhase(GamePhase.GAME_OVER);
-            return;
-        }
-
-        if (currentRoundIndex < 4) {
-            setCurrentRoundIndex(prev => prev + 1);
-            setPhase(GamePhase.TEAM_SELECTION);
-            setSelectedTeam([]);
-            setLeaderIndex((leaderIndex + 1) % players.length);
-            setNarrative('');
-        }
-    };
+      }
+    } finally {
+      setIsProcessingAI(false);
+      socket.emit('next_round', { roomCode });
+    }
+  };
 
     const handleManualEndGame = async (winner: Alliance) => {
         setManualWinner(winner);
         setPhase(GamePhase.GAME_OVER);
-        
+
         setIsProcessingAI(true);
         const analysis = await generateEndGameAnalysis(
             winner === Alliance.GOOD ? "正義陣營 (藍方)" : "邪惡陣營 (紅方)",
@@ -297,6 +199,10 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
         );
         setNarrative(analysis);
         setIsProcessingAI(false);
+
+        if (roomCode) {
+          socket.emit('manual_endgame', { roomCode, winner: winner === Alliance.GOOD ? 'GOOD' : 'EVIL' });
+        }
     };
 
   // -- Render Helpers --
@@ -313,14 +219,14 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
       return (
         <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4 animate-[fadeIn_0.5s]">
             <h2 className="text-2xl font-cinzel text-amber-500 mb-6">確認你的身份</h2>
-            
+
             <div className="flex flex-col md:flex-row items-center gap-8 max-w-5xl w-full justify-center">
                 {/* My Card */}
                 <div className="flex-shrink-0 transform hover:scale-105 transition-transform duration-300">
-                    <RoleCard 
-                        role={myPlayer.role || ROLES_CONFIG.LOYAL_SERVANT} 
-                        isRevealed={showRole} 
-                        onReveal={() => setShowRole(!showRole)} 
+                    <RoleCard
+                        role={myPlayer.role || ROLES_CONFIG.LOYAL_SERVANT}
+                        isRevealed={showRole}
+                        onReveal={() => setShowRole(!showRole)}
                     />
                 </div>
 
@@ -333,7 +239,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                     <p className="text-sm text-slate-400 mb-4 italic">
                         {myPlayer.role ? getRoleDescription(myPlayer.role.type) : ''}
                     </p>
-                    
+
                     {visionList.length > 0 ? (
                         <div className="space-y-4">
                             {visionList.map((item, idx) => (
@@ -366,8 +272,8 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                     <div className="mt-6 p-4 bg-indigo-900/20 rounded border border-indigo-500/30">
                         <h4 className="text-indigo-400 font-bold text-sm mb-1">獲勝條件</h4>
                         <p className="text-sm text-indigo-300 leading-relaxed">
-                            {myPlayer.role?.alliance === Alliance.GOOD 
-                                ? "協助隊伍完成 3 個任務，並確保梅林不被刺客識破。" 
+                            {myPlayer.role?.alliance === Alliance.GOOD
+                                ? "協助隊伍完成 3 個任務，並確保梅林不被刺客識破。"
                                 : "破壞 3 個任務，或在任務失敗後找出並刺殺梅林。"}
                         </p>
                     </div>
@@ -375,9 +281,18 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
             </div>
 
             <div className="mt-10">
-                <Button variant="gold" onClick={() => setPhase(GamePhase.TEAM_SELECTION)} disabled={!showRole} className="px-12 text-lg">
-                    {showRole ? '進入遊戲' : '請翻開卡片查看身份'}
-                </Button>
+                                <Button
+                                    variant="gold"
+                                    onClick={() => {
+                                        if (!roomCode) return;
+                                        setRoleAcked(true);
+                                        socket.emit('ack_role', { roomCode });
+                                    }}
+                                    disabled={!showRole || roleAcked}
+                                    className="px-12 text-lg"
+                                >
+                                    {!showRole ? '請翻開卡片查看身份' : roleAcked ? '等待其他玩家...' : '進入遊戲'}
+                                </Button>
             </div>
         </div>
       );
@@ -399,7 +314,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                 <h2 className={`text-6xl font-cinzel font-bold mb-2 ${manualWinner === Alliance.GOOD ? 'text-blue-400' : 'text-red-500'}`}>
                     {manualWinner === Alliance.GOOD ? '正義獲勝' : '邪惡獲勝'}
                 </h2>
-                
+
                 <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 shadow-2xl mb-8 max-h-60 overflow-y-auto">
                     <p className="font-serif text-slate-300 italic text-lg leading-relaxed text-left">
                         {narrative || "歷史已經蓋棺論定。"}
@@ -409,7 +324,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                 <div className="space-y-3">
                     <Button variant="gold" fullWidth onClick={() => onNavigate(ViewState.HOME)}>返回主頁</Button>
                     {/* Allow Host to change result if needed even after game over */}
-                    {myPlayerId === 'p0' && (
+                    {amHost && (
                         <div className="pt-4 border-t border-slate-800">
                              <p className="text-xs text-slate-500 mb-2">房主判定修正</p>
                              <div className="flex gap-2 justify-center">
@@ -426,7 +341,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                 <h2 className={`text-5xl font-cinzel font-bold mb-8 ${rounds[currentRoundIndex].status === 'SUCCESS' ? 'text-blue-400' : 'text-red-500'}`}>
                     {rounds[currentRoundIndex].status === 'SUCCESS' ? '任務成功' : '任務失敗'}
                 </h2>
-                
+
                 <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 shadow-2xl mb-8">
                     <div className="flex justify-center gap-4 mb-8">
                         {rounds[currentRoundIndex].missionResults.map((res, i) => (
@@ -455,14 +370,15 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
   // Circular layout calculator
   const getPlayerPosition = (index: number, total: number) => {
       const angle = (index / total) * 2 * Math.PI - Math.PI / 2; // Start at top
-      const radius = 130; 
+      const radius = 130;
       return {
           left: `calc(50% + ${Math.cos(angle) * radius}px)`,
           top: `calc(40% + ${Math.sin(angle) * radius}px)`
       };
   };
 
-  const myPlayer = players.find(p => p.id === myPlayerId);
+    const myPlayer = players.find(p => p.id === myPlayerId);
+    const amHost = Boolean(myPlayer?.isHost);
   if (phase === GamePhase.ROLE_REVEAL) return renderRoleReveal();
 
   return (
@@ -472,13 +388,13 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
            <div className="flex justify-center gap-3">
                {rounds.map((r, i) => (
                    <div key={i} className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all relative
-                        ${r.status === 'SUCCESS' ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 
+                        ${r.status === 'SUCCESS' ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' :
                           r.status === 'FAIL' ? 'bg-red-600 border-red-400 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]' :
                           r.status === 'CURRENT' ? 'bg-amber-500/20 border-amber-500 text-amber-500 animate-pulse' :
                           'bg-slate-800 border-slate-700 text-slate-600'
                         }
                    `}>
-                       {r.status === 'SUCCESS' ? <CheckCircle size={16} /> : 
+                       {r.status === 'SUCCESS' ? <CheckCircle size={16} /> :
                         r.status === 'FAIL' ? <XCircle size={16} /> :
                         r.playersRequired}
                    </div>
@@ -522,7 +438,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                         <span className="text-xs text-red-300 mt-1">尋找梅林...</span>
                    </>
                )}
-               
+
                {/* Team selection indicators */}
                <div className="flex flex-wrap justify-center gap-1 mt-3">
                     {selectedTeam.map(id => (
@@ -537,13 +453,13 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                const isSelected = selectedTeam.includes(p.id);
                const isLeader = i === leaderIndex;
                const isMe = p.id === myPlayerId;
-               
+
                // Calculate Vision for current player relative to me
                const visionInfo = myPlayer ? getVisionInfo(myPlayer, p) : null;
-               
+
                return (
-                   <div 
-                        key={p.id} 
+                   <div
+                        key={p.id}
                         className={`absolute w-20 h-20 transition-all duration-300 -translate-x-1/2 -translate-y-1/2 cursor-pointer z-10
                              ${isSelected ? 'scale-110' : ''}
                         `}
@@ -556,7 +472,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                              ${isLeader ? 'ring-2 ring-purple-500 border-purple-400' : ''}
                         `}>
                              <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" />
-                             
+
                              {/* Vision Overlay on Board */}
                              {visionInfo && showVisionOnBoard && (
                                  <div className={`absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[1px] border-2
@@ -570,7 +486,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                                  </div>
                              )}
                         </div>
-                        
+
                         {/* Leader Crown */}
                         {isLeader && (
                             <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-purple-400 drop-shadow-[0_2px_10px_rgba(168,85,247,0.8)] z-20">
@@ -584,7 +500,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                                  <ScrollText size={12} />
                              </div>
                         )}
-                        
+
                         {/* Name Label */}
                         <div className={`absolute top-full left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] whitespace-nowrap mt-2 border font-bold shadow-lg
                             ${isMe ? 'bg-amber-600 border-amber-400 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}
@@ -597,13 +513,13 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
        </div>
 
        {/* HOST JUDGMENT PANEL (When Game is effectively done or Assassination) */}
-       {(phase === GamePhase.ASSASSINATION || (phase === GamePhase.GAME_OVER && manualWinner)) && myPlayerId === 'p0' && phase !== GamePhase.GAME_OVER && (
+       {(phase === GamePhase.ASSASSINATION || (phase === GamePhase.GAME_OVER && manualWinner)) && amHost && phase !== GamePhase.GAME_OVER && (
            <div className="absolute bottom-36 left-0 w-full z-40 px-4 animate-[slideUp_0.5s]">
                <div className="bg-slate-900/95 border border-amber-500/50 rounded-xl p-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-center">
                    <h3 className="font-cinzel text-amber-500 font-bold text-lg mb-2 flex items-center justify-center gap-2">
                        <Gavel size={20} /> 房主裁決時刻
                    </h3>
-                   
+
                    {phase === GamePhase.ASSASSINATION ? (
                        <p className="text-slate-300 text-sm mb-4">
                            正義陣營任務全勝。請確認刺客是否成功刺殺梅林？
@@ -615,14 +531,14 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                    )}
 
                    <div className="grid grid-cols-2 gap-3">
-                        <button 
+                        <button
                             onClick={() => handleManualEndGame(Alliance.EVIL)}
                             className="bg-red-900/80 hover:bg-red-800 text-red-100 border border-red-600 py-3 rounded-lg font-bold flex flex-col items-center gap-1"
                         >
                             <span>⚔️ 刺殺成功</span>
                             <span className="text-[10px] opacity-70">邪惡陣營獲勝</span>
                         </button>
-                        <button 
+                        <button
                             onClick={() => handleManualEndGame(Alliance.GOOD)}
                             className="bg-blue-900/80 hover:bg-blue-800 text-blue-100 border border-blue-500 py-3 rounded-lg font-bold flex flex-col items-center gap-1"
                         >
@@ -633,9 +549,9 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                </div>
            </div>
        )}
-       
+
        {/* Waiting for Host Message (For non-hosts) */}
-       {(phase === GamePhase.ASSASSINATION) && myPlayerId !== 'p0' && (
+       {(phase === GamePhase.ASSASSINATION) && !amHost && (
            <div className="absolute bottom-36 left-0 w-full z-40 px-4 text-center">
                <div className="bg-black/60 backdrop-blur-md rounded-lg p-3 inline-block border border-slate-700">
                    <p className="text-amber-400 animate-pulse font-cinzel">等待房主判定刺殺結果...</p>
@@ -653,9 +569,9 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                            <Crown size={16} />
                            你是隊長，請選擇 {rounds[currentRoundIndex].playersRequired} 名隊員
                        </p>
-                       <Button 
-                        variant="gold" 
-                        fullWidth 
+                       <Button
+                        variant="gold"
+                        fullWidth
                         onClick={submitTeam}
                         disabled={selectedTeam.length !== rounds[currentRoundIndex].playersRequired}
                        >
@@ -717,7 +633,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                        <p className="text-slate-400 font-cinzel">任務執行中，請保持肅靜...</p>
                    </div>
                )}
-               
+
                {/* Assassination/Game Over placeholder for Bottom Bar */}
                {(phase === GamePhase.ASSASSINATION || phase === GamePhase.GAME_OVER) && (
                    <div className="text-center">
@@ -730,13 +646,13 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
        {/* Global Overlays */}
        {(phase === GamePhase.MISSION_REVEAL || phase === GamePhase.GAME_OVER) && renderMissionReveal()}
 
-       <button 
+       <button
         className="absolute top-4 left-4 p-2.5 bg-slate-800/90 rounded-full border border-slate-600 text-slate-400 z-50 hover:text-white hover:bg-slate-700 transition-colors shadow-lg"
         onClick={() => { if(confirm('確定要離開遊戲？')) onNavigate(ViewState.HOME); }}
        >
            <Swords size={20} />
        </button>
-       
+
        {/* Vision Toggle (On Board) */}
        <button
         className={`absolute top-16 right-4 p-2.5 rounded-full border shadow-lg z-50 transition-all ${showVisionOnBoard ? 'bg-amber-600/90 text-white border-amber-400' : 'bg-slate-800/90 text-slate-400 border-slate-600'}`}
@@ -754,23 +670,23 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
            <User size={18} />
            <span className="font-bold text-sm">身份與視野</span>
        </button>
-       
+
        {/* In-Game Role & Vision Modal */}
        {showRole && (
            <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-4 animate-[fadeIn_0.2s]" onClick={() => setShowRole(false)}>
                <div onClick={e => e.stopPropagation()} className="relative max-w-sm w-full flex flex-col items-center">
                     <div className="scale-90 origin-bottom">
-                        <RoleCard 
-                            role={myPlayer?.role || ROLES_CONFIG.LOYAL_SERVANT} 
-                            isRevealed={true} 
+                        <RoleCard
+                            role={myPlayer?.role || ROLES_CONFIG.LOYAL_SERVANT}
+                            isRevealed={true}
                         />
                     </div>
-                    
+
                     <div className="mt-6 w-full bg-slate-900/90 p-5 rounded-xl border border-slate-600 backdrop-blur-xl shadow-2xl">
                         <h4 className="text-amber-500 font-cinzel text-lg mb-2 border-b border-slate-700 pb-2 flex items-center gap-2">
                             <Eye size={18} /> 視野情報
                         </h4>
-                        
+
                         <div className="mb-3 flex items-start gap-2 bg-slate-800/50 p-2 rounded text-xs text-slate-300">
                              <Info size={14} className="mt-0.5 text-blue-400 flex-shrink-0" />
                              <p>{myPlayer?.role ? getRoleDescription(myPlayer.role.type) : ''}</p>
@@ -799,7 +715,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
                             )}
                         </div>
                     </div>
-                    
+
                     <p className="text-slate-500 mt-6 text-sm flex items-center gap-2 animate-pulse">
                         <User size={14} /> 點擊背景關閉
                     </p>
