@@ -5,9 +5,11 @@ import { Crown, Swords, Users, Sparkles } from 'lucide-react';
 
 interface Props {
   onNavigate: (view: ViewState) => void;
+  playerName: string;
+  onPlayerNameChange: (name: string) => void;
 }
 
-export const HomeView: React.FC<Props> = ({ onNavigate }) => {
+export const HomeView: React.FC<Props> = ({ onNavigate, playerName, onPlayerNameChange }) => {
   return (
     <div className="flex flex-col items-center justify-center h-screen px-6 py-12 relative">
       {/* Hero Section */}
@@ -24,6 +26,19 @@ export const HomeView: React.FC<Props> = ({ onNavigate }) => {
         <p className="text-slate-400 text-sm max-w-xs mx-auto leading-relaxed">
           正義與邪惡的終極對決，誰能活著見到聖杯？
         </p>
+      </div>
+
+      {/* Nickname */}
+      <div className="w-full max-w-sm mb-6 z-20">
+        <label className="block text-xs text-slate-500 uppercase tracking-widest mb-2 text-center">你的暱稱</label>
+        <input
+          value={playerName}
+          onChange={(e) => onPlayerNameChange(e.target.value)}
+          maxLength={20}
+          placeholder="輸入你的名字"
+          className="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40"
+        />
+        <p className="text-[11px] text-slate-600 mt-2 text-center">加入房間後也可以再修改</p>
       </div>
 
       {/* Main Actions */}

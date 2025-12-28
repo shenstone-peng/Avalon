@@ -18,6 +18,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
   const [error, setError] = useState<RoomErrorCode | null>(null);
   const [meId, setMeId] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [localName, setLocalName] = useState(playerName);
 
   useEffect(() => {
     const onConnect = () => {
@@ -69,6 +70,10 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       socket.off('connect', onConnect);
     };
   }, [initialRoomCode, onNavigate, playerName, socket]);
+
+  useEffect(() => {
+    setLocalName(playerName);
+  }, [playerName]);
 
   const mappedPlayers: Player[] = useMemo(() => {
     if (!room) return [];
@@ -154,6 +159,32 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
                 <Share2 size={14} /> 邀請好友 / 生成連結
             </button>
          </div>
+      </div>
+
+      {/* Nickname */}
+      <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-4 mb-6">
+        <p className="text-slate-400 text-xs uppercase tracking-widest mb-2 text-center">你的暱稱</p>
+        <div className="flex gap-2">
+          <input
+            value={localName}
+            onChange={(e) => setLocalName(e.target.value)}
+            maxLength={20}
+            placeholder="輸入你的名字"
+            className="flex-1 px-3 py-2 rounded-lg bg-slate-900/80 border border-slate-700 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40"
+          />
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (!roomCode) return;
+              const trimmed = localName.trim();
+              if (!trimmed) return;
+              socket.emit('set_name', { roomCode, name: trimmed });
+            }}
+            disabled={!roomCode || !localName.trim()}
+          >
+            套用
+          </Button>
+        </div>
       </div>
 
       {/* Player List Grid */}

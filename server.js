@@ -277,6 +277,17 @@ io.on('connection', (socket) => {
   socket.on('join_room', ({ roomCode, name }) => {
     try {
       const room = ensureRoom(roomCode);
+
+      // Idempotent re-join: if this socket is already a member, just ensure it is in the socket.io room
+      // and resend the current public state.
+      if (room.players.has(socket.id)) {
+        socket.join(room.code);
+        socket.emit('room_joined', getRoomPublicState(room));
+        broadcastRoomUpdate(room);
+        broadcastGameUpdate(room);
+        return;
+      }
+
       if (room.players.size >= MAX_PLAYERS) {
         socket.emit('room_error', { code: 'ROOM_FULL' });
         return;
@@ -297,6 +308,22 @@ io.on('connection', (socket) => {
       broadcastRoomUpdate(room);
     } catch {
       socket.emit('room_error', { code: 'ROOM_NOT_FOUND' });
+    }
+  });
+
+  socket.on('set_name', ({ roomCode, name }) => {
+    try {
+      const room = ensureRoom(roomCode);
+      const player = room.players.get(socket.id);
+      if (!player) return;
+      const nextName = typeof name === 'string' ? name.trim() : '';
+      if (!nextName) return;
+      player.name = nextName;
+      room.players.set(socket.id, player);
+      broadcastRoomUpdate(room);
+      broadcastGameUpdate(room);
+    } catch {
+      // ignore
     }
   });
 

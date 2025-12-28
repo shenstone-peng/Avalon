@@ -42,6 +42,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
         };
 
         const onGameState = (state: NetGameState) => {
+            setNetError(null);
             setRoomCode(state.roomCode);
 
             const mappedPlayers: Player[] = state.players.map((p) => {
@@ -157,7 +158,8 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
   // -- Multiplayer action emitters --
 
   const handleTeamSelection = (playerId: string) => {
-    if (!roomCode) return;
+        if (!roomCode) return;
+        if (phase !== GamePhase.TEAM_SELECTION) return;
     socket.emit('select_team_toggle', { roomCode, playerId });
   };
 
@@ -415,6 +417,9 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
       );
   }
 
+    const leaderId = players[leaderIndex]?.id;
+    const iAmLeader = phase === GamePhase.TEAM_SELECTION && leaderId === myPlayerId;
+
   return (
     <div className="h-full flex flex-col relative overflow-hidden bg-slate-950">
        {/* Top Bar: Rounds Tracker */}
@@ -494,11 +499,20 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                return (
                    <div
                         key={p.id}
-                        className={`absolute w-20 h-20 transition-all duration-300 -translate-x-1/2 -translate-y-1/2 cursor-pointer z-10
+                    className={`absolute w-20 h-20 transition-all duration-300 -translate-x-1/2 -translate-y-1/2 z-10
+                        ${phase === GamePhase.TEAM_SELECTION ? (iAmLeader ? 'cursor-pointer' : 'cursor-not-allowed opacity-80') : ''}
                              ${isSelected ? 'scale-110' : ''}
                         `}
                         style={pos}
-                        onClick={() => handleTeamSelection(p.id)}
+                    onClick={() => {
+                       if (phase !== GamePhase.TEAM_SELECTION) return;
+                       if (!iAmLeader) {
+                          setNetError('只有隊長可以選人');
+                          setTimeout(() => setNetError(null), 1500);
+                          return;
+                       }
+                       handleTeamSelection(p.id);
+                    }}
                    >
                         {/* Avatar */}
                         <div className={`w-full h-full rounded-full border-2 overflow-hidden relative shadow-2xl bg-slate-800
@@ -596,6 +610,13 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
        {/* Bottom Actions Area */}
        <div className="bg-slate-900/90 backdrop-blur-lg border-t border-slate-700 p-4 pb-safe z-30 min-h-[160px] flex flex-col justify-center shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
            <div className="max-w-md mx-auto w-full">
+               {netError && (
+                   <div className="mb-3 text-center">
+                       <span className="inline-flex items-center gap-2 text-xs text-rose-300 bg-rose-950/40 border border-rose-900/60 px-3 py-2 rounded-full">
+                           <Info size={14} /> {netError}
+                       </span>
+                   </div>
+               )}
                {/* Team Selection Actions */}
                {phase === GamePhase.TEAM_SELECTION && players[leaderIndex].id === myPlayerId && (
                    <div className="flex flex-col gap-3 animate-[slideUp_0.3s]">
