@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ViewState, Player } from '../types';
 import { Button } from '../components/Button';
-import { ArrowLeft, Share2, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Copy, Check } from 'lucide-react';
 import { AVATARS } from '../constants';
 import { getSocket, NetRoomState, RoomErrorCode } from '../services/socket';
 
@@ -18,6 +18,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
   const [error, setError] = useState<RoomErrorCode | null>(null);
   const [meId, setMeId] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState(false);
   const [localName, setLocalName] = useState(playerName);
 
   useEffect(() => {
@@ -93,6 +94,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
   const others = mappedPlayers.filter((p) => p.id !== meId);
   const totalPlayers = mappedPlayers.length;
   const isHost = Boolean(room?.hostId && room.hostId === meId);
+  const maxPlayers = room?.maxPlayers ?? 5;
 
   const handleCopyCode = async () => {
       try {
@@ -105,25 +107,15 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
   };
 
   const handleInvite = async () => {
-      const inviteUrl = `${window.location.origin}?room=${roomCode}`;
-      const shareData = {
-          title: '王者圓桌 - 邀請函',
-          text: `👑 誠摯邀請您加入《王者圓桌》的對決！\n🔑 房間號碼：${roomCode}\n\n點擊下方連結立即加入：`,
-          url: inviteUrl
-      };
-
       try {
-          // Try using Web Share API (Mobile friendly)
-          if (navigator.share) {
-              await navigator.share(shareData);
-          } else {
-              // Fallback to clipboard
-              const fullText = `${shareData.text}\n${inviteUrl}`;
-              await navigator.clipboard.writeText(fullText);
-              alert('✅ 邀請連結已複製到剪貼簿！\n快去分享給好友吧。');
-          }
+        const inviteUrl = `${window.location.origin}?room=${roomCode}`;
+        await navigator.clipboard.writeText(inviteUrl);
+        setCopiedInvite(true);
+        setTimeout(() => setCopiedInvite(false), 2000);
       } catch (err) {
           console.error('Share failed:', err);
+        const inviteUrl = `${window.location.origin}?room=${roomCode}`;
+        window.prompt('複製邀請連結：', inviteUrl);
       }
   };
 
@@ -156,7 +148,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
                 onClick={handleInvite}
                 className="flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-950/30 px-4 py-2 rounded-full border border-indigo-500/30 transition-all active:scale-95"
             >
-                <Share2 size={14} /> 邀請好友 / 生成連結
+              <Copy size={14} /> {copiedInvite ? '已複製邀請連結' : '複製邀請連結'}
             </button>
          </div>
       </div>
@@ -215,7 +207,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
             ))}
 
             {/* Empty Slots */}
-            {Array.from({ length: Math.max(0, 5 - totalPlayers) }).map((_, i) => (
+            {Array.from({ length: Math.max(0, maxPlayers - totalPlayers) }).map((_, i) => (
                 <div key={`empty-${i}`} className="flex flex-col items-center gap-2 opacity-30">
                      <div className="w-16 h-16 rounded-full border-2 border-slate-700 border-dashed flex items-center justify-center">
                         <span className="text-2xl text-slate-600">+</span>
@@ -227,9 +219,9 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       </div>
 
       <div className="mt-4 space-y-3">
-          <p className="text-center text-xs text-slate-500">
-              至少需要 5 人才能開始遊戲 ({totalPlayers}/5)
-          </p>
+            <p className="text-center text-xs text-slate-500">
+              至少需要 5 人才能開始遊戲（目前 {totalPlayers}/{maxPlayers}）
+            </p>
           {error && (
             <p className="text-center text-xs text-rose-400">
               {error === 'ROOM_NOT_FOUND' && '房間不存在或已關閉'}
