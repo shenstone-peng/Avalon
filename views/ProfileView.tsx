@@ -21,7 +21,7 @@ export const ProfileView: React.FC<Props> = ({ onNavigate }) => {
   ];
 
   return (
-    <div className="h-full overflow-y-auto pb-24 bg-slate-900">
+    <div className="h-[100dvh] overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] bg-slate-900">
       <div className="p-4 flex items-center gap-4 bg-slate-800 sticky top-0 z-10 border-b border-slate-700">
         <button onClick={() => onNavigate(ViewState.HOME)} className="p-2 text-slate-400 hover:text-white">
           <ArrowLeft />

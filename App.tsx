@@ -43,12 +43,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] text-slate-100 overflow-hidden relative selection:bg-amber-700 selection:text-white">
+    <div className="min-h-[100dvh] bg-slate-950 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] text-slate-100 overflow-x-hidden relative selection:bg-amber-700 selection:text-white">
       {/* Background decorative elements */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-20 bg-gradient-to-b from-indigo-900/30 to-black"></div>
 
       {/* Main Content Area */}
-      <div className="relative z-10 h-full flex flex-col">
+      <div className="relative z-10 min-h-[100dvh] flex flex-col">
          {renderView()}
       </div>
 

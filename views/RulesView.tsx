@@ -10,7 +10,7 @@ export const RulesView: React.FC<Props> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'config' | 'lore'>('config');
 
   return (
-    <div className="h-full flex flex-col bg-slate-950 pb-20">
+        <div className="h-[100dvh] flex flex-col bg-slate-950 pb-[calc(6rem+env(safe-area-inset-bottom))]">
       {/* Header */}
       <div className="p-4 flex items-center gap-4 bg-slate-900 sticky top-0 z-20 border-b border-slate-800 shadow-md">
         <button onClick={() => onNavigate(ViewState.HOME)} className="p-2 text-slate-400 hover:text-white transition-colors">
