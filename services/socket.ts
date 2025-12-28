@@ -80,4 +80,5 @@ export interface NetGameState {
   rounds: NetMissionRound[];
   selectedTeam: string[];
   manualWinner: 'GOOD' | 'EVIL' | null;
+  assassinationTargetId?: string | null;
 }

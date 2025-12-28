@@ -112,7 +112,7 @@ const getRoomPublicState = (room) => {
     hostId: room.hostId,
     players,
     maxPlayers: MAX_PLAYERS,
-    inGame: Boolean(room.game),
+    inGame: Boolean(room.game && room.game.phase !== 'GAME_OVER'),
   };
 };
 
@@ -144,6 +144,7 @@ const getGamePublicState = (room) => {
     rounds: game.rounds,
     selectedTeam: game.selectedTeam,
     manualWinner: game.manualWinner,
+    assassinationTargetId: game.assassinationTargetId ?? null,
   };
 };
 
@@ -210,6 +211,7 @@ const startGameForRoom = (room) => {
     currentRoundIndex: 0,
     selectedTeam: [],
     manualWinner: null,
+    assassinationTargetId: null,
     players,
     rounds: missionCfg.map((cfg, idx) => ({
       roundNumber: idx + 1,
@@ -271,6 +273,7 @@ const nextRoundFromReveal = (room) => {
 
   if (successes >= 3) {
     game.phase = 'ASSASSINATION';
+    game.assassinationTargetId = null;
     return;
   }
 
@@ -343,7 +346,7 @@ io.on('connection', (socket) => {
         socket.emit('room_error', { code: 'ROOM_FULL' });
         return;
       }
-      if (room.game) {
+      if (room.game && room.game.phase !== 'GAME_OVER') {
         socket.emit('room_error', { code: 'GAME_ALREADY_STARTED' });
         return;
       }
@@ -386,7 +389,26 @@ io.on('connection', (socket) => {
         socket.emit('room_error', { code: 'NOT_ENOUGH_PLAYERS' });
         return;
       }
-      if (room.game) return;
+      if (room.game && room.game.phase !== 'GAME_OVER') return;
+      startGameForRoom(room);
+      broadcastRoomUpdate(room);
+      broadcastGameUpdate(room);
+    } catch {
+      // ignore
+    }
+  });
+
+  socket.on('restart_game', ({ roomCode }) => {
+    try {
+      const room = ensureRoom(roomCode);
+      if (!isHost(room, socket.id)) return;
+      if (room.players.size < MIN_PLAYERS) {
+        socket.emit('room_error', { code: 'NOT_ENOUGH_PLAYERS' });
+        return;
+      }
+      if (!room.game) return;
+      if (room.game.phase !== 'GAME_OVER') return;
+
       startGameForRoom(room);
       broadcastRoomUpdate(room);
       broadcastGameUpdate(room);
@@ -457,6 +479,7 @@ io.on('connection', (socket) => {
       if (game.selectedTeam.length !== round.playersRequired) return;
 
       round.selectedTeam = [...game.selectedTeam];
+      round.votes = {};
       game.phase = 'VOTING';
       for (const id of allPlayers(room)) game.players[id].vote = null;
       broadcastGameUpdate(room);
@@ -473,6 +496,10 @@ io.on('connection', (socket) => {
       if (!game.players[socket.id]) return;
       if (vote !== 'APPROVE' && vote !== 'REJECT') return;
       game.players[socket.id].vote = vote;
+
+      const round = game.rounds[game.currentRoundIndex];
+      round.votes = round.votes || {};
+      round.votes[socket.id] = vote;
 
       const ids = allPlayers(room);
       const allVoted = ids.every((id) => game.players[id]?.vote);
@@ -524,6 +551,27 @@ io.on('connection', (socket) => {
       const game = ensureGame(room);
       if (winner !== 'GOOD' && winner !== 'EVIL') return;
       game.manualWinner = winner;
+      game.phase = 'GAME_OVER';
+      broadcastGameUpdate(room);
+    } catch {
+      // ignore
+    }
+  });
+
+  socket.on('assassinate', ({ roomCode, targetId }) => {
+    try {
+      const room = ensureRoom(roomCode);
+      const game = ensureGame(room);
+      if (game.phase !== 'ASSASSINATION') return;
+      if (!game.players[socket.id]) return;
+      if (game.players[socket.id].roleKey !== 'ASSASSIN') return;
+      if (typeof targetId !== 'string' || !targetId) return;
+      if (!game.players[targetId]) return;
+
+      game.assassinationTargetId = targetId;
+
+      const targetRole = game.players[targetId].roleKey;
+      game.manualWinner = targetRole === 'MERLIN' ? 'EVIL' : 'GOOD';
       game.phase = 'GAME_OVER';
       broadcastGameUpdate(room);
     } catch {
