@@ -93,6 +93,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
   const others = mappedPlayers.filter((p) => p.id !== meId);
   const totalPlayers = mappedPlayers.length;
   const isHost = Boolean(room?.hostId && room.hostId === meId);
+  const maxPlayers = room?.maxPlayers ?? 5;
 
   const handleCopyCode = async () => {
       try {
@@ -215,7 +216,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
             ))}
 
             {/* Empty Slots */}
-            {Array.from({ length: Math.max(0, 5 - totalPlayers) }).map((_, i) => (
+            {Array.from({ length: Math.max(0, maxPlayers - totalPlayers) }).map((_, i) => (
                 <div key={`empty-${i}`} className="flex flex-col items-center gap-2 opacity-30">
                      <div className="w-16 h-16 rounded-full border-2 border-slate-700 border-dashed flex items-center justify-center">
                         <span className="text-2xl text-slate-600">+</span>
@@ -227,9 +228,9 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       </div>
 
       <div className="mt-4 space-y-3">
-          <p className="text-center text-xs text-slate-500">
-              至少需要 5 人才能開始遊戲 ({totalPlayers}/5)
-          </p>
+            <p className="text-center text-xs text-slate-500">
+              至少需要 5 人才能開始遊戲（目前 {totalPlayers}/{maxPlayers}）
+            </p>
           {error && (
             <p className="text-center text-xs text-rose-400">
               {error === 'ROOM_NOT_FOUND' && '房間不存在或已關閉'}

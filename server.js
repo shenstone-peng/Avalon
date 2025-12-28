@@ -20,7 +20,8 @@ const io = new SocketIOServer(httpServer, {
   },
 });
 
-const MAX_PLAYERS = 5;
+const MIN_PLAYERS = 5;
+const MAX_PLAYERS = 10;
 
 /**
  * In-memory rooms. Production should persist to DB/Redis.
@@ -33,14 +34,46 @@ const MAX_PLAYERS = 5;
  */
 const rooms = new Map();
 
-const ROLES_5 = ['MERLIN', 'PERCIVAL', 'LOYAL_SERVANT', 'MORGANA', 'ASSASSIN'];
-const MISSION_CONFIG_5 = [
-  { players: 2, fails: 1 },
-  { players: 3, fails: 1 },
-  { players: 2, fails: 1 },
-  { players: 3, fails: 1 },
-  { players: 3, fails: 1 },
-];
+const PLAYER_COUNT_CONFIG = {
+  5: { good: 3, evil: 2, questSizes: [2, 3, 2, 3, 3] },
+  6: { good: 4, evil: 2, questSizes: [2, 3, 4, 3, 4] },
+  7: { good: 4, evil: 3, questSizes: [2, 3, 3, 4, 4] },
+  8: { good: 5, evil: 3, questSizes: [3, 4, 4, 5, 5] },
+  9: { good: 6, evil: 3, questSizes: [3, 4, 4, 5, 5] },
+  10: { good: 6, evil: 4, questSizes: [3, 4, 4, 5, 5] },
+};
+
+const getMissionConfigForCount = (playerCount) => {
+  const cfg = PLAYER_COUNT_CONFIG[playerCount];
+  if (!cfg) throw new Error('UNSUPPORTED_PLAYER_COUNT');
+  return cfg.questSizes.map((players, idx) => ({
+    players,
+    // Standard Avalon: 4th mission requires 2 fails when playerCount >= 7
+    fails: playerCount >= 7 && idx === 3 ? 2 : 1,
+  }));
+};
+
+const getRolesDeckForCount = (playerCount) => {
+  const cfg = PLAYER_COUNT_CONFIG[playerCount];
+  if (!cfg) throw new Error('UNSUPPORTED_PLAYER_COUNT');
+
+  // Always include core specials (stable, matches current client vision rules)
+  const baseGood = ['MERLIN', 'PERCIVAL'];
+  const baseEvil = ['MORGANA', 'ASSASSIN'];
+
+  const loyalCount = Math.max(0, cfg.good - baseGood.length);
+  const minionCount = Math.max(0, cfg.evil - baseEvil.length);
+
+  const deck = [
+    ...baseGood,
+    ...Array.from({ length: loyalCount }).map(() => 'LOYAL_SERVANT'),
+    ...baseEvil,
+    ...Array.from({ length: minionCount }).map(() => 'MINION'),
+  ];
+
+  if (deck.length !== playerCount) throw new Error('ROLE_DECK_MISMATCH');
+  return deck;
+};
 
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
@@ -137,7 +170,9 @@ const computeAlliance = (roleKey) => {
 
 const startGameForRoom = (room) => {
   const playerIds = Array.from(room.players.keys());
-  const roles = shuffle(ROLES_5);
+  if (playerIds.length < MIN_PLAYERS || playerIds.length > MAX_PLAYERS) throw new Error('INVALID_PLAYER_COUNT');
+
+  const roles = shuffle(getRolesDeckForCount(playerIds.length));
 
   const players = {};
   for (let i = 0; i < playerIds.length; i++) {
@@ -153,6 +188,8 @@ const startGameForRoom = (room) => {
     };
   }
 
+  const missionCfg = getMissionConfigForCount(playerIds.length);
+
   room.game = {
     phase: 'ROLE_REVEAL',
     leaderId: room.hostId,
@@ -160,7 +197,7 @@ const startGameForRoom = (room) => {
     selectedTeam: [],
     manualWinner: null,
     players,
-    rounds: MISSION_CONFIG_5.map((cfg, idx) => ({
+    rounds: missionCfg.map((cfg, idx) => ({
       roundNumber: idx + 1,
       playersRequired: cfg.players,
       failsRequired: cfg.fails,
@@ -331,7 +368,7 @@ io.on('connection', (socket) => {
     try {
       const room = ensureRoom(roomCode);
       if (!isHost(room, socket.id)) return;
-      if (room.players.size < MAX_PLAYERS) {
+      if (room.players.size < MIN_PLAYERS) {
         socket.emit('room_error', { code: 'NOT_ENOUGH_PLAYERS' });
         return;
       }

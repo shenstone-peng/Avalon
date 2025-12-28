@@ -228,7 +228,8 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
         .filter(item => item.info !== null);
 
       return (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4 animate-[fadeIn_0.5s]">
+        <div className="fixed inset-0 z-50 bg-slate-950 overflow-y-auto overscroll-contain animate-[fadeIn_0.5s]">
+            <div className="min-h-[100dvh] flex flex-col items-center px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <h2 className="text-2xl font-cinzel text-amber-500 mb-6">確認你的身份</h2>
 
             <div className="flex flex-col md:flex-row items-center gap-8 max-w-5xl w-full justify-center">
@@ -291,19 +292,24 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                 </div>
             </div>
 
-            <div className="mt-10">
-                                <Button
-                                    variant="gold"
-                                    onClick={() => {
-                                        if (!roomCode) return;
-                                        setRoleAcked(true);
-                                        socket.emit('ack_role', { roomCode });
-                                    }}
-                                    disabled={!showRole || roleAcked}
-                                    className="px-12 text-lg"
-                                >
-                                    {!showRole ? '請翻開卡片查看身份' : roleAcked ? '等待其他玩家...' : '進入遊戲'}
-                                </Button>
+            <div className="flex-1" />
+
+            <div className="sticky bottom-0 w-full max-w-5xl pt-6 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-slate-950/90 backdrop-blur">
+                <div className="flex justify-center">
+                    <Button
+                        variant="gold"
+                        onClick={() => {
+                            if (!roomCode) return;
+                            setRoleAcked(true);
+                            socket.emit('ack_role', { roomCode });
+                        }}
+                        disabled={!showRole || roleAcked}
+                        className="px-12 text-lg"
+                    >
+                        {!showRole ? '請翻開卡片查看身份' : roleAcked ? '等待其他玩家...' : '進入遊戲'}
+                    </Button>
+                </div>
+            </div>
             </div>
         </div>
       );
