@@ -11,6 +11,7 @@ import { Swords, Shield, ScrollText, User } from 'lucide-react';
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.HOME);
   const [playerName, setPlayerName] = useState("亞瑟王候選人");
+  const [initialRoomCode, setInitialRoomCode] = useState<string | null>(null);
 
   // Check for room code in URL on mount
   useEffect(() => {
@@ -18,6 +19,7 @@ export default function App() {
     const roomCode = params.get('room');
     if (roomCode) {
       console.log("偵測到房間連結:", roomCode);
+      setInitialRoomCode(roomCode);
       setCurrentView(ViewState.LOBBY);
     }
   }, []);
@@ -28,9 +30,9 @@ export default function App() {
       case ViewState.HOME:
         return <HomeView onNavigate={setCurrentView} />;
       case ViewState.LOBBY:
-        return <LobbyView onNavigate={setCurrentView} />;
+        return <LobbyView onNavigate={setCurrentView} playerName={playerName} initialRoomCode={initialRoomCode} />;
       case ViewState.GAME:
-        return <GameView onNavigate={setCurrentView} playerName={playerName} />;
+        return <GameView onNavigate={setCurrentView} playerName={playerName} initialRoomCode={initialRoomCode} />;
       case ViewState.PROFILE:
         return <ProfileView onNavigate={setCurrentView} />;
       case ViewState.RULES:
@@ -44,7 +46,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] text-slate-100 overflow-hidden relative selection:bg-amber-700 selection:text-white">
       {/* Background decorative elements */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-20 bg-gradient-to-b from-indigo-900/30 to-black"></div>
-      
+
       {/* Main Content Area */}
       <div className="relative z-10 h-full flex flex-col">
          {renderView()}
@@ -66,7 +68,7 @@ export default function App() {
 }
 
 const NavBtn = ({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) => (
-  <button 
+  <button
     onClick={onClick}
     className={`flex flex-col items-center gap-1 text-xs transition-colors ${active ? 'text-amber-500' : 'text-slate-400 hover:text-slate-200'}`}
   >

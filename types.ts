@@ -48,6 +48,7 @@ export interface Player {
   isLeader: boolean;
   avatar: string;
   isBot: boolean;
+  isHost?: boolean;
   vote?: 'APPROVE' | 'REJECT' | null;
   missionAction?: 'SUCCESS' | 'FAIL' | null;
 }

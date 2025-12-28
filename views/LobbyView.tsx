@@ -1,36 +1,93 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ViewState, Player } from '../types';
 import { Button } from '../components/Button';
 import { ArrowLeft, Share2, Copy, Check } from 'lucide-react';
 import { AVATARS } from '../constants';
+import { getSocket, NetRoomState, RoomErrorCode } from '../services/socket';
 
 interface Props {
   onNavigate: (view: ViewState) => void;
+  playerName: string;
+  initialRoomCode: string | null;
 }
 
-export const LobbyView: React.FC<Props> = ({ onNavigate }) => {
-  const [players, setPlayers] = useState<Partial<Player>[]>([]);
-  const [roomCode] = useState("AV-9527");
+export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoomCode }) => {
+  const socket = useMemo(() => getSocket(), []);
+  const [roomCode, setRoomCode] = useState('');
+  const [room, setRoom] = useState<NetRoomState | null>(null);
+  const [error, setError] = useState<RoomErrorCode | null>(null);
+  const [meId, setMeId] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => {
-    // Simulate players joining
-    const interval = setInterval(() => {
-      setPlayers(prev => {
-        if (prev.length >= 5) {
-          clearInterval(interval);
-          return prev;
-        }
-        return [...prev, {
-            id: `p-${prev.length}`,
-            name: `玩家 ${prev.length + 1}`,
-            avatar: AVATARS[prev.length % AVATARS.length]
-        }];
-      });
-    }, 800);
+    const onConnect = () => {
+      setMeId(socket.id ?? '');
+    };
 
-    return () => clearInterval(interval);
-  }, []);
+    const onJoined = (state: NetRoomState) => {
+      setRoom(state);
+      setRoomCode(state.roomCode);
+      setMeId(socket.id ?? '');
+      setError(null);
+
+      const url = new URL(window.location.href);
+      url.searchParams.set('room', state.roomCode);
+      window.history.replaceState({}, '', url.toString());
+    };
+
+    const onRoomUpdate = (state: NetRoomState) => {
+      setRoom(state);
+      setRoomCode(state.roomCode);
+    };
+
+    const onRoomError = ({ code }: { code: RoomErrorCode }) => {
+      setError(code);
+    };
+
+    const onGameState = () => {
+      onNavigate(ViewState.GAME);
+    };
+
+    socket.on('room_joined', onJoined);
+    socket.on('room_update', onRoomUpdate);
+    socket.on('room_error', onRoomError);
+    socket.on('game_state', onGameState);
+    socket.on('connect', onConnect);
+
+    const codeFromUrl = initialRoomCode || new URLSearchParams(window.location.search).get('room');
+    if (codeFromUrl) {
+      socket.emit('join_room', { roomCode: codeFromUrl, name: playerName });
+    } else {
+      socket.emit('create_room', { name: playerName });
+    }
+
+    return () => {
+      socket.off('room_joined', onJoined);
+      socket.off('room_update', onRoomUpdate);
+      socket.off('room_error', onRoomError);
+      socket.off('game_state', onGameState);
+      socket.off('connect', onConnect);
+    };
+  }, [initialRoomCode, onNavigate, playerName, socket]);
+
+  const mappedPlayers: Player[] = useMemo(() => {
+    if (!room) return [];
+    return room.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      avatar: AVATARS[p.avatarIndex % AVATARS.length],
+      isLeader: false,
+      isBot: false,
+      isHost: p.isHost,
+      vote: null,
+      missionAction: null,
+    }));
+  }, [room]);
+
+  const me = mappedPlayers.find((p) => p.id === meId) || null;
+  const others = mappedPlayers.filter((p) => p.id !== meId);
+  const totalPlayers = mappedPlayers.length;
+  const isHost = Boolean(room?.hostId && room.hostId === meId);
 
   const handleCopyCode = async () => {
       try {
@@ -79,17 +136,18 @@ export const LobbyView: React.FC<Props> = ({ onNavigate }) => {
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center mb-6">
          <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">房間號碼</p>
          <div className="flex items-center justify-center gap-3">
-             <span className="text-4xl font-mono text-amber-400 font-bold tracking-wider">{roomCode}</span>
-             <button 
+           <span className="text-4xl font-mono text-amber-400 font-bold tracking-wider">{roomCode || '----'}</span>
+             <button
                 onClick={handleCopyCode}
                 className="text-slate-500 hover:text-amber-400 transition-colors p-1"
                 title="複製房間號"
+            disabled={!roomCode}
              >
                  {copiedCode ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
              </button>
          </div>
          <div className="mt-4 flex justify-center">
-            <button 
+            <button
                 onClick={handleInvite}
                 className="flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-950/30 px-4 py-2 rounded-full border border-indigo-500/30 transition-all active:scale-95"
             >
@@ -102,26 +160,31 @@ export const LobbyView: React.FC<Props> = ({ onNavigate }) => {
       <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-3 gap-4">
             {/* Myself */}
+          {me && (
             <div className="flex flex-col items-center gap-2 animate-[popIn_0.3s]">
-                <div className="w-16 h-16 rounded-full border-2 border-amber-500 p-1 relative">
-                    <img src={AVATARS[7]} alt="Me" className="w-full h-full rounded-full object-cover" />
-                    <div className="absolute -bottom-1 -right-1 bg-amber-500 text-amber-950 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-slate-900">YOU</div>
-                </div>
-                <span className="text-xs text-slate-300 font-medium truncate w-full text-center">我</span>
+              <div className="w-16 h-16 rounded-full border-2 border-amber-500 p-1 relative">
+                <img src={me.avatar} alt="Me" className="w-full h-full rounded-full object-cover" />
+                <div className="absolute -bottom-1 -right-1 bg-amber-500 text-amber-950 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-slate-900">YOU</div>
+              </div>
+              <span className="text-xs text-slate-300 font-medium truncate w-full text-center">{me.name}</span>
             </div>
+          )}
 
             {/* Other Players */}
-            {players.map((p, i) => (
-                <div key={i} className="flex flex-col items-center gap-2 animate-[popIn_0.3s]">
-                    <div className="w-16 h-16 rounded-full border-2 border-slate-600 p-1 bg-slate-800">
-                        <img src={p.avatar} alt={p.name} className="w-full h-full rounded-full object-cover grayscale opacity-70" />
-                    </div>
-                    <span className="text-xs text-slate-400 truncate w-full text-center">{p.name}</span>
+            {others.map((p) => (
+              <div key={p.id} className="flex flex-col items-center gap-2 animate-[popIn_0.3s]">
+                <div className="w-16 h-16 rounded-full border-2 border-slate-600 p-1 bg-slate-800 relative">
+                  <img src={p.avatar} alt={p.name} className="w-full h-full rounded-full object-cover grayscale opacity-70" />
+                  {p.isHost && (
+                  <div className="absolute -bottom-1 -right-1 bg-indigo-500 text-indigo-950 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-slate-900">HOST</div>
+                  )}
                 </div>
+                <span className="text-xs text-slate-400 truncate w-full text-center">{p.name}</span>
+              </div>
             ))}
-            
+
             {/* Empty Slots */}
-            {Array.from({ length: Math.max(0, 4 - players.length) }).map((_, i) => (
+            {Array.from({ length: Math.max(0, 5 - totalPlayers) }).map((_, i) => (
                 <div key={`empty-${i}`} className="flex flex-col items-center gap-2 opacity-30">
                      <div className="w-16 h-16 rounded-full border-2 border-slate-700 border-dashed flex items-center justify-center">
                         <span className="text-2xl text-slate-600">+</span>
@@ -134,15 +197,23 @@ export const LobbyView: React.FC<Props> = ({ onNavigate }) => {
 
       <div className="mt-4 space-y-3">
           <p className="text-center text-xs text-slate-500">
-              至少需要 5 人才能開始遊戲 ({players.length + 1}/5)
+              至少需要 5 人才能開始遊戲 ({totalPlayers}/5)
           </p>
-          <Button 
-            variant="gold" 
-            fullWidth 
-            onClick={() => onNavigate(ViewState.GAME)}
-            disabled={players.length < 4}
+          {error && (
+            <p className="text-center text-xs text-rose-400">
+              {error === 'ROOM_NOT_FOUND' && '房間不存在或已關閉'}
+              {error === 'ROOM_FULL' && '房間已滿'}
+              {error === 'GAME_ALREADY_STARTED' && '遊戲已開始，無法加入'}
+              {error === 'NOT_ENOUGH_PLAYERS' && '人數不足，無法開始'}
+            </p>
+          )}
+          <Button
+            variant="gold"
+            fullWidth
+            onClick={() => socket.emit('start_game', { roomCode })}
+            disabled={!isHost || totalPlayers < 5 || !roomCode}
           >
-            {players.length < 4 ? '等待玩家...' : '開始遊戲'}
+            {!isHost ? '等待房主開始...' : totalPlayers < 5 ? '等待玩家...' : '開始遊戲'}
           </Button>
       </div>
     </div>
