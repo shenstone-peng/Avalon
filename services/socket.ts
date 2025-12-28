@@ -73,6 +73,7 @@ export interface NetMissionRound {
 export interface NetGameState {
   roomCode: string;
   phase: NetGamePhase;
+  proposalAttempt?: number;
   players: NetGamePlayer[];
   leaderId: string;
   leaderIndex: number;

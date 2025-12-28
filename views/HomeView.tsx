@@ -1,7 +1,7 @@
 import React from 'react';
 import { ViewState } from '../types';
 import { Button } from '../components/Button';
-import { Crown, Swords, Users, Sparkles } from 'lucide-react';
+import { Crown, Users, Sparkles } from 'lucide-react';
 
 interface Props {
   onNavigate: (view: ViewState) => void;
@@ -43,9 +43,6 @@ export const HomeView: React.FC<Props> = ({ onNavigate, playerName, onPlayerName
 
       {/* Main Actions */}
       <div className="w-full max-w-sm space-y-4 z-20">
-        <Button variant="gold" fullWidth onClick={() => onNavigate(ViewState.LOBBY)}>
-           <Swords size={20} /> 快速匹配
-        </Button>
         <Button variant="secondary" fullWidth onClick={() => onNavigate(ViewState.LOBBY)}>
            <Users size={20} /> 創建房間
         </Button>

@@ -17,6 +17,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     const socket = useMemo(() => getSocket(), []);
     const [roomCode, setRoomCode] = useState<string>('');
     const [phase, setPhase] = useState<GamePhase>(GamePhase.SETUP);
+    const [proposalAttempt, setProposalAttempt] = useState(1);
     const [players, setPlayers] = useState<Player[]>([]);
     const [myPlayerId, setMyPlayerId] = useState<string>('');
     const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
@@ -45,6 +46,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
         const onGameState = (state: NetGameState) => {
             setNetError(null);
             setRoomCode(state.roomCode);
+            setProposalAttempt((state as any).proposalAttempt ?? 1);
 
             if (state.phase === 'ROLE_REVEAL') {
                 setRoleAcked(false);
@@ -508,6 +510,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                    <>
                         <Gavel size={32} className="text-slate-300 mb-2 animate-bounce" />
                         <span className="text-white font-bold text-lg">全員投票中</span>
+                        <span className="text-[10px] text-slate-400 mt-1">提案投票：第 {proposalAttempt}/5 次</span>
                    </>
                )}
                {phase === GamePhase.MISSION_EXECUTION && (
@@ -716,16 +719,36 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                )}
 
                {/* Voting Actions */}
-               {phase === GamePhase.VOTING && players.find(p => p.id === myPlayerId)?.vote === null && (
-                   <div className="grid grid-cols-2 gap-4 animate-[slideUp_0.3s]">
-                       <Button variant="primary" onClick={() => handleVote('APPROVE')} className="bg-indigo-600 hover:bg-indigo-500">
-                           <CheckCircle size={20} className="mr-2"/> 贊成出發
-                       </Button>
-                       <Button variant="danger" onClick={() => handleVote('REJECT')} className="bg-rose-700 hover:bg-rose-600">
-                           <XCircle size={20} className="mr-2"/> 否決提案
-                       </Button>
-                   </div>
-               )}
+               {phase === GamePhase.VOTING && players.find(p => p.id === myPlayerId)?.vote === null && (() => {
+                   const myAlliance = players.find(p => p.id === myPlayerId)?.role?.alliance;
+                   const isForced = proposalAttempt >= 5;
+                   const mustApprove = isForced && myAlliance === Alliance.GOOD;
+                   return (
+                       <div className="space-y-3 animate-[slideUp_0.3s]">
+                           {isForced && (
+                               <div className="text-center text-xs text-rose-200 bg-rose-950/30 border border-rose-800/40 rounded-lg px-3 py-2">
+                                   <span className="font-bold">強制輪（第 5 次提案）</span>：好人必須投「贊成」。若第 5 次仍被否決，邪惡陣營直接獲勝。
+                               </div>
+                           )}
+                           <div className="grid grid-cols-2 gap-4">
+                               <Button variant="primary" onClick={() => handleVote('APPROVE')} className="bg-indigo-600 hover:bg-indigo-500">
+                                   <CheckCircle size={20} className="mr-2"/> 贊成出發
+                               </Button>
+                               <Button
+                                   variant="danger"
+                                   onClick={() => handleVote('REJECT')}
+                                   disabled={mustApprove}
+                                   className={mustApprove ? 'bg-slate-800 opacity-50 cursor-not-allowed' : 'bg-rose-700 hover:bg-rose-600'}
+                               >
+                                   <XCircle size={20} className="mr-2"/> 否決提案
+                               </Button>
+                           </div>
+                           {mustApprove && (
+                               <p className="text-center text-xs text-slate-400 italic">你是好人：本輪被規則強制投贊成。</p>
+                           )}
+                       </div>
+                   );
+               })()}
                {phase === GamePhase.VOTING && players.find(p => p.id === myPlayerId)?.vote !== null && (
                    <p className="text-center text-slate-400 italic">已投票，等待其他人...</p>
                )}
