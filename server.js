@@ -59,7 +59,13 @@ const getRolesDeckForCount = (playerCount) => {
 
   // Always include core specials (stable, matches current client vision rules)
   const baseGood = ['MERLIN', 'PERCIVAL'];
+  // Per rule.md:
+  // - 5–6: Morgana + Assassin
+  // - 7–9: + Mordred
+  // - 10: + Mordred + Oberon
   const baseEvil = ['MORGANA', 'ASSASSIN'];
+  if (playerCount >= 7) baseEvil.push('MORDRED');
+  if (playerCount >= 10) baseEvil.push('OBERON');
 
   const loyalCount = Math.max(0, cfg.good - baseGood.length);
   const minionCount = Math.max(0, cfg.evil - baseEvil.length);
@@ -164,7 +170,15 @@ const ensureGame = (room) => {
 const isHost = (room, socketId) => room.hostId === socketId;
 
 const computeAlliance = (roleKey) => {
-  if (roleKey === 'MORGANA' || roleKey === 'ASSASSIN') return 'EVIL';
+  if (
+    roleKey === 'MORGANA' ||
+    roleKey === 'ASSASSIN' ||
+    roleKey === 'MORDRED' ||
+    roleKey === 'OBERON' ||
+    roleKey === 'MINION'
+  ) {
+    return 'EVIL';
+  }
   return 'GOOD';
 };
 
