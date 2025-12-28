@@ -29,6 +29,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     const [showVisionOnBoard, setShowVisionOnBoard] = useState(true);
     const [manualWinner, setManualWinner] = useState<Alliance | null>(null);
     const [roleAcked, setRoleAcked] = useState(false);
+    const [netError, setNetError] = useState<string | null>(null);
 
     useEffect(() => {
         const codeFromUrl = initialRoomCode || new URLSearchParams(window.location.search).get('room');
@@ -37,6 +38,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
 
         const onConnect = () => {
             setMyPlayerId(socket.id ?? '');
+            if (codeFromUrl) socket.emit('get_game_state', { roomCode: codeFromUrl });
         };
 
         const onGameState = (state: NetGameState) => {
@@ -83,14 +85,21 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
         socket.on('game_state', onGameState);
         socket.on('connect', onConnect);
 
+        const onRoomError = ({ code }: { code: string }) => {
+            setNetError(code);
+        };
+        socket.on('room_error', onRoomError);
+
         // If user hits /game directly, try to join room (no-op if already in room).
         if (codeFromUrl) {
             socket.emit('join_room', { roomCode: codeFromUrl, name: playerName });
+            socket.emit('get_game_state', { roomCode: codeFromUrl });
         }
 
         return () => {
             socket.off('game_state', onGameState);
             socket.off('connect', onConnect);
+            socket.off('room_error', onRoomError);
         };
     }, [initialRoomCode, playerName, socket]);
 
@@ -380,6 +389,31 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     const myPlayer = players.find(p => p.id === myPlayerId);
     const amHost = Boolean(myPlayer?.isHost);
   if (phase === GamePhase.ROLE_REVEAL) return renderRoleReveal();
+
+  const isStateReady = players.length > 0 && rounds.length > 0 && phase !== GamePhase.SETUP;
+  if (!isStateReady) {
+      return (
+          <div className="h-screen flex flex-col items-center justify-center bg-slate-950 px-6 text-center">
+              <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-6" />
+              <h2 className="font-cinzel text-xl text-amber-400 mb-2">正在同步遊戲狀態…</h2>
+              <p className="text-sm text-slate-400">
+                  {netError
+                      ? `連線錯誤：${netError}`
+                      : roomCode
+                          ? `房間：${roomCode}`
+                          : '尚未取得房間資訊'}
+              </p>
+              <div className="mt-6 w-full max-w-xs space-y-3">
+                  <Button variant="gold" fullWidth onClick={() => roomCode && socket.emit('get_game_state', { roomCode })} disabled={!roomCode}>
+                      重新取得狀態
+                  </Button>
+                  <Button variant="secondary" fullWidth onClick={() => onNavigate(ViewState.LOBBY)}>
+                      返回大廳
+                  </Button>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div className="h-full flex flex-col relative overflow-hidden bg-slate-950">

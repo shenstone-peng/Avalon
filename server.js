@@ -317,6 +317,18 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('get_game_state', ({ roomCode }) => {
+    try {
+      if (typeof roomCode !== 'string' || !roomCode) return;
+      const room = ensureRoom(roomCode);
+      if (!room.players.has(socket.id)) return;
+      if (!room.game) return;
+      socket.emit('game_state', getGamePublicState(room));
+    } catch {
+      // ignore
+    }
+  });
+
   socket.on('ack_role', ({ roomCode }) => {
     try {
       const room = ensureRoom(roomCode);
