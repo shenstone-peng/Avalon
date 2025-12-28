@@ -22,6 +22,7 @@ const io = new SocketIOServer(httpServer, {
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 10;
+const MAX_PROPOSAL_ATTEMPTS = 5;
 
 /**
  * In-memory rooms. Production should persist to DB/Redis.
@@ -137,6 +138,7 @@ const getGamePublicState = (room) => {
   return {
     roomCode: room.code,
     phase: game.phase,
+    proposalAttempt: game.proposalAttempt ?? 1,
     players,
     leaderId: game.leaderId,
     leaderIndex: players.findIndex((p) => p.id === game.leaderId),
@@ -210,6 +212,7 @@ const startGameForRoom = (room) => {
     leaderId: room.hostId,
     currentRoundIndex: 0,
     selectedTeam: [],
+    proposalAttempt: 1,
     manualWinner: null,
     assassinationTargetId: null,
     players,
@@ -237,11 +240,38 @@ const tallyVotesAndAdvance = (room) => {
     game.phase = 'MISSION_EXECUTION';
     for (const id of ids) game.players[id].missionAction = null;
   } else {
+    // Proposal rejected. Rule: if the 5th proposal is also rejected,
+    // EVIL wins the whole game immediately.
+    if ((game.proposalAttempt ?? 1) >= MAX_PROPOSAL_ATTEMPTS) {
+      game.phase = 'GAME_OVER';
+      game.manualWinner = 'EVIL';
+      return;
+    }
+
+    game.proposalAttempt = (game.proposalAttempt ?? 1) + 1;
     game.phase = 'TEAM_SELECTION';
     const idx = ids.indexOf(game.leaderId);
     game.leaderId = ids[(idx + 1) % ids.length];
     game.selectedTeam = [];
     for (const id of ids) game.players[id].vote = null;
+  }
+};
+
+const applyForcedApprovalsIfNeeded = (room) => {
+  const game = ensureGame(room);
+  if (game.phase !== 'VOTING') return;
+  if ((game.proposalAttempt ?? 1) !== MAX_PROPOSAL_ATTEMPTS) return;
+
+  const round = game.rounds[game.currentRoundIndex];
+  round.votes = round.votes || {};
+
+  for (const id of allPlayers(room)) {
+    const gp = game.players[id];
+    if (!gp) continue;
+    if (gp.alliance === 'GOOD') {
+      gp.vote = 'APPROVE';
+      round.votes[id] = 'APPROVE';
+    }
   }
 };
 
@@ -290,6 +320,7 @@ const nextRoundFromReveal = (room) => {
   }
 
   game.currentRoundIndex += 1;
+  game.proposalAttempt = 1;
   game.rounds = game.rounds.map((r, idx) => {
     if (idx === game.currentRoundIndex) return { ...r, status: 'CURRENT' };
     return r;
@@ -482,6 +513,9 @@ io.on('connection', (socket) => {
       round.votes = {};
       game.phase = 'VOTING';
       for (const id of allPlayers(room)) game.players[id].vote = null;
+
+      // Forced proposal rule: on the 5th proposal attempt, GOOD must approve.
+      applyForcedApprovalsIfNeeded(room);
       broadcastGameUpdate(room);
     } catch {
       // ignore
@@ -495,11 +529,14 @@ io.on('connection', (socket) => {
       if (game.phase !== 'VOTING') return;
       if (!game.players[socket.id]) return;
       if (vote !== 'APPROVE' && vote !== 'REJECT') return;
-      game.players[socket.id].vote = vote;
+      const gp = game.players[socket.id];
+      const isForced = (game.proposalAttempt ?? 1) === MAX_PROPOSAL_ATTEMPTS;
+      const effectiveVote = isForced && gp.alliance === 'GOOD' ? 'APPROVE' : vote;
+      gp.vote = effectiveVote;
 
       const round = game.rounds[game.currentRoundIndex];
       round.votes = round.votes || {};
-      round.votes[socket.id] = vote;
+      round.votes[socket.id] = effectiveVote;
 
       const ids = allPlayers(room);
       const allVoted = ids.every((id) => game.players[id]?.vote);
