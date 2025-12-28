@@ -46,6 +46,14 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
             setNetError(null);
             setRoomCode(state.roomCode);
 
+            if (state.phase === 'ROLE_REVEAL') {
+                setRoleAcked(false);
+                setShowRole(false);
+                setNarrative('');
+                setManualWinner(null);
+                setAssassinationTargetId(null);
+            }
+
             const mappedPlayers: Player[] = state.players.map((p) => {
                 const role = p.roleKey ? (ROLES_CONFIG as any)[p.roleKey] : undefined;
                 return {
@@ -80,13 +88,24 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
             };
             setPhase(phaseMap[state.phase] ?? GamePhase.SETUP);
 
-            if (state.manualWinner) {
-                setManualWinner(state.manualWinner === 'GOOD' ? Alliance.GOOD : Alliance.EVIL);
-            }
+            if (state.manualWinner) setManualWinner(state.manualWinner === 'GOOD' ? Alliance.GOOD : Alliance.EVIL);
+            else setManualWinner(null);
         };
 
         socket.on('game_state', onGameState);
         socket.on('connect', onConnect);
+
+        const onRoomUpdate = (state: { roomCode: string; inGame: boolean }) => {
+            // Safety net: if we missed the broadcasted game_state (rare but possible),
+            // room_update tells us a new game is live; pull the current game state.
+            if (!state?.inGame) return;
+            if (phase !== GamePhase.GAME_OVER && phase !== GamePhase.SETUP) return;
+            const targetCode = codeFromUrl || roomCode;
+            if (!targetCode) return;
+            if (state.roomCode !== targetCode) return;
+            socket.emit('get_game_state', { roomCode: targetCode });
+        };
+        socket.on('room_update', onRoomUpdate);
 
         const onRoomError = ({ code }: { code: string }) => {
             setNetError(code);
@@ -103,8 +122,9 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
             socket.off('game_state', onGameState);
             socket.off('connect', onConnect);
             socket.off('room_error', onRoomError);
+            socket.off('room_update', onRoomUpdate);
         };
-    }, [initialRoomCode, playerName, socket]);
+    }, [initialRoomCode, playerName, phase, roomCode, socket]);
 
   // --- VISION LOGIC ---
   const getVisionInfo = (observer: Player, target: Player): { icon: React.ReactNode, text: string, type: 'evil' | 'good' | 'unknown' } | null => {
@@ -341,7 +361,23 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                 </div>
 
                 <div className="space-y-3">
+                    {amHost && (
+                        <Button
+                            variant="gold"
+                            fullWidth
+                            onClick={() => {
+                                if (!roomCode) return;
+                                socket.emit('restart_game', { roomCode });
+                            }}
+                        >
+                            再來一局
+                        </Button>
+                    )}
                     <Button variant="gold" fullWidth onClick={() => onNavigate(ViewState.HOME)}>返回主頁</Button>
+
+                    {!amHost && (
+                        <p className="text-center text-xs text-slate-400 italic">等待房主開始下一局…</p>
+                    )}
                     {/* Allow Host to change result if needed even after game over */}
                     {amHost && (
                         <div className="pt-4 border-t border-slate-800">

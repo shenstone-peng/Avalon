@@ -40,6 +40,12 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
     const onRoomUpdate = (state: NetRoomState) => {
       setRoom(state);
       setRoomCode(state.roomCode);
+
+      // If a new game starts and this client missed the broadcasted game_state,
+      // proactively pull the latest state.
+      if (state.inGame) {
+        socket.emit('get_game_state', { roomCode: state.roomCode });
+      }
     };
 
     const onRoomError = ({ code }: { code: RoomErrorCode }) => {

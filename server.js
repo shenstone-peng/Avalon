@@ -112,7 +112,7 @@ const getRoomPublicState = (room) => {
     hostId: room.hostId,
     players,
     maxPlayers: MAX_PLAYERS,
-    inGame: Boolean(room.game),
+    inGame: Boolean(room.game && room.game.phase !== 'GAME_OVER'),
   };
 };
 
@@ -346,7 +346,7 @@ io.on('connection', (socket) => {
         socket.emit('room_error', { code: 'ROOM_FULL' });
         return;
       }
-      if (room.game) {
+      if (room.game && room.game.phase !== 'GAME_OVER') {
         socket.emit('room_error', { code: 'GAME_ALREADY_STARTED' });
         return;
       }
@@ -389,7 +389,26 @@ io.on('connection', (socket) => {
         socket.emit('room_error', { code: 'NOT_ENOUGH_PLAYERS' });
         return;
       }
-      if (room.game) return;
+      if (room.game && room.game.phase !== 'GAME_OVER') return;
+      startGameForRoom(room);
+      broadcastRoomUpdate(room);
+      broadcastGameUpdate(room);
+    } catch {
+      // ignore
+    }
+  });
+
+  socket.on('restart_game', ({ roomCode }) => {
+    try {
+      const room = ensureRoom(roomCode);
+      if (!isHost(room, socket.id)) return;
+      if (room.players.size < MIN_PLAYERS) {
+        socket.emit('room_error', { code: 'NOT_ENOUGH_PLAYERS' });
+        return;
+      }
+      if (!room.game) return;
+      if (room.game.phase !== 'GAME_OVER') return;
+
       startGameForRoom(room);
       broadcastRoomUpdate(room);
       broadcastGameUpdate(room);
