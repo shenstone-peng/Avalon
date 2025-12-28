@@ -128,7 +128,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
   };
 
   return (
-    <div className="flex flex-col h-screen pt-4 px-4 pb-24">
+    <div className="flex flex-col h-[100dvh] pt-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <div className="flex items-center justify-between mb-8">
         <button onClick={() => onNavigate(ViewState.HOME)} className="p-2 text-slate-400 hover:text-white">
           <ArrowLeft />

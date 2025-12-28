@@ -420,8 +420,8 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     const leaderId = players[leaderIndex]?.id;
     const iAmLeader = phase === GamePhase.TEAM_SELECTION && leaderId === myPlayerId;
 
-  return (
-    <div className="h-full flex flex-col relative overflow-hidden bg-slate-950">
+    return (
+        <div className="h-[100dvh] flex flex-col relative overflow-hidden bg-slate-950">
        {/* Top Bar: Rounds Tracker */}
        <div className="pt-4 px-2 pb-2 bg-slate-900/90 border-b border-slate-800 z-20 shadow-lg">
            <div className="flex justify-center gap-3">
@@ -608,7 +608,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
        )}
 
        {/* Bottom Actions Area */}
-       <div className="bg-slate-900/90 backdrop-blur-lg border-t border-slate-700 p-4 pb-safe z-30 min-h-[160px] flex flex-col justify-center shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+    <div className="bg-slate-900/90 backdrop-blur-lg border-t border-slate-700 p-4 pb-safe z-30 min-h-[160px] flex flex-col justify-center shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
            <div className="max-w-md mx-auto w-full">
                {netError && (
                    <div className="mb-3 text-center">

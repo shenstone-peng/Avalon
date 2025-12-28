@@ -7,6 +7,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
   <style>
+    html, body, #root {
+      height: 100%;
+    }
     body {
       font-family: 'Noto Serif TC', serif;
       background-color: #0f172a; /* slate-900 */
@@ -37,6 +40,14 @@
     ::-webkit-scrollbar-thumb {
       background: #475569;
       border-radius: 3px;
+    }
+
+    /* iOS safe-area helpers (Tailwind CDN can't generate pb-safe by itself) */
+    .pb-safe {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .pt-safe {
+      padding-top: env(safe-area-inset-top);
     }
   </style>
 <script type="importmap">

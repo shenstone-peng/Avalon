@@ -11,7 +11,7 @@ interface Props {
 
 export const HomeView: React.FC<Props> = ({ onNavigate, playerName, onPlayerNameChange }) => {
   return (
-    <div className="flex flex-col items-center justify-center h-screen px-6 py-12 relative">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] px-6 py-12 relative pb-[calc(6rem+env(safe-area-inset-bottom))]">
       {/* Hero Section */}
       <div className="text-center mb-12 animate-[fadeIn_1s_ease-out]">
         <div className="inline-flex items-center justify-center p-4 bg-amber-500/10 rounded-full border border-amber-500/30 mb-6 shadow-[0_0_40px_rgba(245,158,11,0.2)]">
@@ -52,7 +52,7 @@ export const HomeView: React.FC<Props> = ({ onNavigate, playerName, onPlayerName
       </div>
 
       {/* Decorative Footer */}
-      <div className="absolute bottom-24 text-center">
+      <div className="absolute bottom-[calc(6rem+env(safe-area-inset-bottom))] text-center">
          <div className="flex items-center gap-2 text-xs text-slate-600 mb-2">
             <Sparkles size={12} />
             <span>S1 賽季：亞瑟王的召喚</span>
