@@ -79,6 +79,13 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // ignore
+    }
     localStorage.removeItem('auth_token');
     setAuthToken(null);
     setSocketAuthToken(null);

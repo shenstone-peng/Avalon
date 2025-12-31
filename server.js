@@ -10,6 +10,7 @@ import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 
 import { User } from './models/User.js';
+import { Match } from './models/Match.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +36,19 @@ const signToken = (user) => {
   const secret = getJwtSecret();
   const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
   return jwt.sign({ sub: user._id.toString(), name: user.name }, secret, { expiresIn });
+};
+
+const requireHttpAuth = (req, res, next) => {
+  try {
+    const header = req.headers.authorization || '';
+    const [kind, token] = header.split(' ');
+    if (kind !== 'Bearer' || !token) return res.status(401).json({ ok: false, message: 'Unauthorized' });
+    const payload = jwt.verify(token, getJwtSecret());
+    req.user = payload;
+    return next();
+  } catch {
+    return res.status(401).json({ ok: false, message: 'Unauthorized' });
+  }
 };
 
 const httpServer = createServer(app);
@@ -147,6 +161,105 @@ app.post('/api/login', async (req, res) => {
     return res.json({ ok: true, message: 'Logged in', token, user: { name: user.name } });
   } catch (err) {
     console.error('POST /api/login failed:', err);
+    return res.status(500).json({ ok: false, message: 'Server error' });
+  }
+});
+
+// --- Profile / Stats ---
+app.get('/api/profile', requireHttpAuth, async (req, res) => {
+  try {
+    const userId = req.user?.sub?.toString?.() || req.user?.sub;
+    if (!userId) return res.status(401).json({ ok: false, message: 'Unauthorized' });
+
+    const matches = await Match.find({ 'players.userId': userId })
+      .sort({ endedAt: -1 })
+      .limit(20)
+      .lean();
+
+    const total = matches.length;
+    let wins = 0;
+    let losses = 0;
+    let goodGames = 0;
+    let goodWins = 0;
+    let evilGames = 0;
+    let evilWins = 0;
+
+    const roleAgg = new Map();
+
+    const recent = matches.map((m) => {
+      const me = (m.players || []).find((p) => p.userId === userId);
+      if (me?.won) wins += 1;
+      else losses += 1;
+
+      if (me?.alliance === 'GOOD') {
+        goodGames += 1;
+        if (me.won) goodWins += 1;
+      }
+      if (me?.alliance === 'EVIL') {
+        evilGames += 1;
+        if (me.won) evilWins += 1;
+      }
+
+      if (me?.roleKey) {
+        const r = roleAgg.get(me.roleKey) || { roleKey: me.roleKey, games: 0, wins: 0 };
+        r.games += 1;
+        if (me.won) r.wins += 1;
+        roleAgg.set(me.roleKey, r);
+      }
+
+      return {
+        endedAt: m.endedAt,
+        winner: m.winner,
+        roomCode: m.roomCode,
+        playerCount: m.playerCount,
+        me: me
+          ? {
+              roleKey: me.roleKey,
+              alliance: me.alliance,
+              won: me.won,
+              name: me.name,
+            }
+          : null,
+      };
+    });
+
+    const roles = Array.from(roleAgg.values())
+      .map((r) => ({
+        roleKey: r.roleKey,
+        games: r.games,
+        wins: r.wins,
+        winRate: r.games ? Math.round((r.wins / r.games) * 100) : 0,
+      }))
+      .sort((a, b) => b.games - a.games)
+      .slice(0, 10);
+
+    return res.json({
+      ok: true,
+      user: {
+        id: userId,
+        name: req.user?.name || null,
+      },
+      stats: {
+        total,
+        wins,
+        losses,
+        winRate: total ? Math.round((wins / total) * 100) : 0,
+        good: {
+          games: goodGames,
+          wins: goodWins,
+          winRate: goodGames ? Math.round((goodWins / goodGames) * 100) : 0,
+        },
+        evil: {
+          games: evilGames,
+          wins: evilWins,
+          winRate: evilGames ? Math.round((evilWins / evilGames) * 100) : 0,
+        },
+        roles,
+      },
+      recent,
+    });
+  } catch (err) {
+    console.error('GET /api/profile failed:', err);
     return res.status(500).json({ ok: false, message: 'Server error' });
   }
 });
@@ -372,6 +485,56 @@ const computeAlliance = (roleKey) => {
   return 'GOOD';
 };
 
+const recordMatchIfNeeded = async (room, reason = null) => {
+  const game = room?.game;
+  if (!room || !game) return;
+  if (game.matchRecorded) return;
+  if (game.phase !== 'GAME_OVER') return;
+  if (game.manualWinner !== 'GOOD' && game.manualWinner !== 'EVIL') return;
+
+  const endedAt = new Date();
+  const startedAt = game.startedAt ? new Date(game.startedAt) : endedAt;
+
+  const players = [];
+  for (const socketId of Object.keys(game.players || {})) {
+    const gp = game.players[socketId];
+    if (!gp) continue;
+    const userId = gp.userId || room.players.get(socketId)?.userId || null;
+    if (!userId) continue;
+    const name = room.players.get(socketId)?.name || gp.name || '玩家';
+    const alliance = gp.alliance;
+    const won = alliance === game.manualWinner;
+    players.push({ userId, name, roleKey: gp.roleKey, alliance, won });
+  }
+
+  if (players.length === 0) return;
+
+  game.matchRecorded = true;
+  try {
+    await Match.create({
+      roomCode: room.code,
+      startedAt,
+      endedAt,
+      winner: game.manualWinner,
+      reason,
+      playerCount: players.length,
+      players,
+    });
+  } catch (e) {
+    console.error('Failed to record match:', e);
+    // Allow retry on next broadcast if needed
+    game.matchRecorded = false;
+  }
+};
+
+const setGameOver = (room, winner, reason = null) => {
+  const game = ensureGame(room);
+  game.phase = 'GAME_OVER';
+  game.manualWinner = winner;
+  // Fire and forget (do not block game loop)
+  recordMatchIfNeeded(room, reason);
+};
+
 const startGameForRoom = (room) => {
   const playerIds = Array.from(room.players.keys());
   if (playerIds.length < MIN_PLAYERS || playerIds.length > MAX_PLAYERS) throw new Error('INVALID_PLAYER_COUNT');
@@ -382,8 +545,10 @@ const startGameForRoom = (room) => {
   for (let i = 0; i < playerIds.length; i++) {
     const id = playerIds[i];
     const roleKey = roles[i];
+    const userId = room.players.get(id)?.userId || null;
     players[id] = {
       id,
+      userId,
       roleKey,
       alliance: computeAlliance(roleKey),
       vote: null,
@@ -395,6 +560,8 @@ const startGameForRoom = (room) => {
   const missionCfg = getMissionConfigForCount(playerIds.length);
 
   room.game = {
+    startedAt: new Date().toISOString(),
+    matchRecorded: false,
     phase: 'ROLE_REVEAL',
     leaderId: room.hostId,
     currentRoundIndex: 0,
@@ -430,8 +597,7 @@ const tallyVotesAndAdvance = (room) => {
     // Proposal rejected. Rule: if the 5th proposal is also rejected,
     // EVIL wins the whole game immediately.
     if ((game.proposalAttempt ?? 1) >= MAX_PROPOSAL_ATTEMPTS) {
-      game.phase = 'GAME_OVER';
-      game.manualWinner = 'EVIL';
+      setGameOver(room, 'EVIL', 'FIFTH_PROPOSAL_REJECTED');
       return;
     }
 
@@ -495,14 +661,12 @@ const nextRoundFromReveal = (room) => {
   }
 
   if (fails >= 3) {
-    game.phase = 'GAME_OVER';
-    game.manualWinner = 'EVIL';
+    setGameOver(room, 'EVIL', 'THREE_MISSIONS_FAILED');
     return;
   }
 
   if (game.currentRoundIndex >= game.rounds.length - 1) {
-    game.phase = 'GAME_OVER';
-    game.manualWinner = successes >= fails ? 'GOOD' : 'EVIL';
+    setGameOver(room, successes >= fails ? 'GOOD' : 'EVIL', 'ROUNDS_COMPLETE');
     return;
   }
 
@@ -831,8 +995,7 @@ io.on('connection', (socket) => {
       if (!isHost(room, socket.id)) return;
       const game = ensureGame(room);
       if (winner !== 'GOOD' && winner !== 'EVIL') return;
-      game.manualWinner = winner;
-      game.phase = 'GAME_OVER';
+      setGameOver(room, winner, 'MANUAL');
       broadcastGameUpdate(room);
     } catch {
       // ignore
@@ -852,8 +1015,7 @@ io.on('connection', (socket) => {
       game.assassinationTargetId = targetId;
 
       const targetRole = game.players[targetId].roleKey;
-      game.manualWinner = targetRole === 'MERLIN' ? 'EVIL' : 'GOOD';
-      game.phase = 'GAME_OVER';
+      setGameOver(room, targetRole === 'MERLIN' ? 'EVIL' : 'GOOD', 'ASSASSINATION');
       broadcastGameUpdate(room);
     } catch {
       // ignore

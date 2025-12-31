@@ -134,10 +134,26 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       }
   };
 
+  const clearRoomFromUrl = () => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="flex flex-col h-[100dvh] pt-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <div className="flex items-center justify-between mb-8">
-        <button onClick={() => onNavigate(ViewState.HOME)} className="p-2 text-slate-400 hover:text-white">
+        <button
+          onClick={() => {
+            clearRoomFromUrl();
+            onNavigate(ViewState.HOME);
+          }}
+          className="p-2 text-slate-400 hover:text-white"
+        >
           <ArrowLeft />
         </button>
         <h2 className="font-cinzel font-bold text-xl">準備大廳</h2>
