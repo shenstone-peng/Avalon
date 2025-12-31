@@ -1,9 +1,15 @@
 
+import 'dotenv/config';
+
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
+
+import { User } from './models/User.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +17,25 @@ const __dirname = path.dirname(__filename);
 const app = express();
 // Azure App Service 會透過環境變數注入 PORT
 const port = process.env.PORT || 3000;
+
+app.disable('x-powered-by');
+app.use(express.json({ limit: '10kb' }));
+
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (secret && secret.trim()) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Missing required env var JWT_SECRET in production');
+  }
+  // Dev fallback only.
+  return 'dev-only-jwt-secret-change-me';
+};
+
+const signToken = (user) => {
+  const secret = getJwtSecret();
+  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+  return jwt.sign({ sub: user._id.toString(), name: user.name }, secret, { expiresIn });
+};
 
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
@@ -20,9 +45,149 @@ const io = new SocketIOServer(httpServer, {
   },
 });
 
+// Require JWT for all socket connections (login required before entering rooms)
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake?.auth?.token;
+    if (!token || typeof token !== 'string') {
+      return next(new Error('UNAUTHORIZED'));
+    }
+    const payload = jwt.verify(token, getJwtSecret());
+    socket.user = payload;
+    socket.data.userId = payload?.sub?.toString?.() || payload?.sub;
+    socket.data.userName = payload?.name;
+    return next();
+  } catch {
+    return next(new Error('UNAUTHORIZED'));
+  }
+});
+
+const getUserId = (socket) => {
+  const userId = socket?.data?.userId;
+  return typeof userId === 'string' && userId.trim() ? userId : null;
+};
+
+const migrateGameSocketId = (game, oldId, newId) => {
+  if (!game || !oldId || !newId || oldId === newId) return;
+  if (game.players?.[oldId]) {
+    game.players[newId] = { ...game.players[oldId], id: newId };
+    delete game.players[oldId];
+  }
+  if (game.leaderId === oldId) game.leaderId = newId;
+  if (game.assassinationTargetId === oldId) game.assassinationTargetId = newId;
+
+  if (Array.isArray(game.selectedTeam)) {
+    game.selectedTeam = game.selectedTeam.map((id) => (id === oldId ? newId : id));
+  }
+
+  if (Array.isArray(game.rounds)) {
+    for (const round of game.rounds) {
+      if (Array.isArray(round.selectedTeam)) {
+        round.selectedTeam = round.selectedTeam.map((id) => (id === oldId ? newId : id));
+      }
+      if (round.votes && typeof round.votes === 'object' && round.votes[oldId]) {
+        round.votes[newId] = round.votes[oldId];
+        delete round.votes[oldId];
+      }
+    }
+  }
+};
+
+// --- Auth APIs (Mongo/Cosmos via Mongoose) ---
+app.post('/api/register', async (req, res) => {
+  try {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
+    if (!name || name.length > 20) {
+      return res.status(400).json({ ok: false, message: 'Invalid name' });
+    }
+    if (!password || password.length < 6 || password.length > 200) {
+      return res.status(400).json({ ok: false, message: 'Invalid password' });
+    }
+
+    const existing = await User.findOne({ name }).lean();
+    if (existing) {
+      return res.status(409).json({ ok: false, message: 'User already exists' });
+    }
+
+    const user = await User.create({ name, password });
+    const token = signToken(user);
+    return res.status(201).json({ ok: true, message: 'Registered', token, user: { name: user.name } });
+  } catch (err) {
+    // Duplicate key (race condition)
+    if (err && typeof err === 'object' && 'code' in err && err.code === 11000) {
+      return res.status(409).json({ ok: false, message: 'User already exists' });
+    }
+    console.error('POST /api/register failed:', err);
+    return res.status(500).json({ ok: false, message: 'Server error' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
+    if (!name || !password) {
+      return res.status(400).json({ ok: false, message: 'Missing credentials' });
+    }
+
+    const user = await User.findOne({ name });
+    if (!user) {
+      return res.status(401).json({ ok: false, message: 'Invalid credentials' });
+    }
+
+    const ok = await user.verifyPassword(password);
+    if (!ok) {
+      return res.status(401).json({ ok: false, message: 'Invalid credentials' });
+    }
+
+    const token = signToken(user);
+    return res.json({ ok: true, message: 'Logged in', token, user: { name: user.name } });
+  } catch (err) {
+    console.error('POST /api/login failed:', err);
+    return res.status(500).json({ ok: false, message: 'Server error' });
+  }
+});
+
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 10;
 const MAX_PROPOSAL_ATTEMPTS = 5;
+
+// Grace periods to reduce "room disappeared" issues caused by transient disconnects.
+// - When a socket disconnects, we keep its seat for a short time to allow quick reconnect.
+// - When a room becomes empty, keep it for a while before deleting (useful on flaky mobile networks).
+const DISCONNECT_GRACE_MS = Number.parseInt(process.env.DISCONNECT_GRACE_MS || '15000', 10);
+const EMPTY_ROOM_TTL_MS = Number.parseInt(process.env.EMPTY_ROOM_TTL_MS || '300000', 10);
+
+const pendingDisconnectCleanup = new Map();
+const pendingRoomCleanup = new Map();
+
+const clearDisconnectCleanup = (socketId) => {
+  const t = pendingDisconnectCleanup.get(socketId);
+  if (t) clearTimeout(t);
+  pendingDisconnectCleanup.delete(socketId);
+};
+
+const clearRoomCleanup = (roomCode) => {
+  const t = pendingRoomCleanup.get(roomCode);
+  if (t) clearTimeout(t);
+  pendingRoomCleanup.delete(roomCode);
+};
+
+const scheduleRoomCleanupIfEmpty = (room) => {
+  if (!room || room.players.size !== 0) return;
+  if (pendingRoomCleanup.has(room.code)) return;
+  const timer = setTimeout(() => {
+    const current = rooms.get(room.code);
+    if (current && current.players.size === 0) {
+      rooms.delete(room.code);
+    }
+    pendingRoomCleanup.delete(room.code);
+  }, EMPTY_ROOM_TTL_MS);
+  pendingRoomCleanup.set(room.code, timer);
+};
 
 /**
  * In-memory rooms. Production should persist to DB/Redis.
@@ -163,6 +328,28 @@ const ensureRoom = (code) => {
   const room = rooms.get(code);
   if (!room) throw new Error('ROOM_NOT_FOUND');
   return room;
+};
+
+const removePlayerFromRoom = (room, socketId) => {
+  if (!room.players.has(socketId)) return;
+  room.players.delete(socketId);
+
+  if (room.players.size === 0) {
+    scheduleRoomCleanupIfEmpty(room);
+    return;
+  }
+
+  if (room.hostId === socketId) {
+    room.hostId = room.players.keys().next().value;
+  }
+
+  // If a game is running and a player leaves, keep the state but remove player.
+  if (room.game) {
+    delete room.game.players[socketId];
+    if (room.game.leaderId === socketId) {
+      room.game.leaderId = room.hostId;
+    }
+  }
 };
 
 const ensureGame = (room) => {
@@ -339,6 +526,12 @@ const nextRoundFromReveal = (room) => {
 io.on('connection', (socket) => {
   socket.on('create_room', ({ name }) => {
     const code = generateRoomCode();
+    const userId = getUserId(socket);
+    if (!userId) {
+      socket.emit('room_error', { code: 'ROOM_NOT_FOUND' });
+      return;
+    }
+    const authedName = typeof socket.data?.userName === 'string' ? socket.data.userName.trim() : '';
     const room = {
       code,
       hostId: socket.id,
@@ -348,11 +541,13 @@ io.on('connection', (socket) => {
 
     room.players.set(socket.id, {
       id: socket.id,
-      name: typeof name === 'string' && name.trim() ? name.trim() : '玩家',
+      userId,
+      name: authedName || (typeof name === 'string' && name.trim() ? name.trim() : '玩家'),
       avatarIndex: 0,
     });
 
     rooms.set(code, room);
+    clearRoomCleanup(code);
     socket.join(code);
 
     socket.emit('room_joined', getRoomPublicState(room));
@@ -362,6 +557,54 @@ io.on('connection', (socket) => {
   socket.on('join_room', ({ roomCode, name }) => {
     try {
       const room = ensureRoom(roomCode);
+      clearRoomCleanup(room.code);
+      const userId = getUserId(socket);
+      if (!userId) {
+        socket.emit('room_error', { code: 'ROOM_NOT_FOUND' });
+        return;
+      }
+
+      const authedName = typeof socket.data?.userName === 'string' ? socket.data.userName.trim() : '';
+
+      // If this logged-in user is already in the room under a different socket,
+      // migrate their player + game state to this new socket to avoid "new identity" duplicates.
+      let existingSocketId = null;
+      let existingPlayer = null;
+      for (const [sid, p] of room.players.entries()) {
+        if (p?.userId === userId) {
+          existingSocketId = sid;
+          existingPlayer = p;
+          break;
+        }
+      }
+
+      if (existingSocketId && existingPlayer && existingSocketId !== socket.id) {
+        clearDisconnectCleanup(existingSocketId);
+        // Disconnect old socket to enforce single active session per user per room.
+        try {
+          const oldSocket = io.sockets.sockets.get(existingSocketId);
+          oldSocket?.disconnect(true);
+        } catch {
+          // ignore
+        }
+
+        room.players.delete(existingSocketId);
+        room.players.set(socket.id, {
+          ...existingPlayer,
+          id: socket.id,
+          userId,
+          name: authedName || (typeof name === 'string' && name.trim() ? name.trim() : existingPlayer.name),
+        });
+
+        if (room.hostId === existingSocketId) room.hostId = socket.id;
+        if (room.game) migrateGameSocketId(room.game, existingSocketId, socket.id);
+
+        socket.join(room.code);
+        socket.emit('room_joined', getRoomPublicState(room));
+        broadcastRoomUpdate(room);
+        broadcastGameUpdate(room);
+        return;
+      }
 
       // Idempotent re-join: if this socket is already a member, just ensure it is in the socket.io room
       // and resend the current public state.
@@ -384,7 +627,8 @@ io.on('connection', (socket) => {
 
       room.players.set(socket.id, {
         id: socket.id,
-        name: typeof name === 'string' && name.trim() ? name.trim() : '玩家',
+        userId,
+        name: authedName || (typeof name === 'string' && name.trim() ? name.trim() : '玩家'),
         avatarIndex: room.players.size,
       });
 
@@ -619,26 +863,9 @@ io.on('connection', (socket) => {
   socket.on('leave_room', ({ roomCode }) => {
     try {
       const room = ensureRoom(roomCode);
-      room.players.delete(socket.id);
+      clearDisconnectCleanup(socket.id);
+      removePlayerFromRoom(room, socket.id);
       socket.leave(room.code);
-
-      if (room.players.size === 0) {
-        rooms.delete(room.code);
-        return;
-      }
-
-      if (room.hostId === socket.id) {
-        room.hostId = room.players.keys().next().value;
-      }
-
-      // If a game is running and a player leaves, keep the state but remove player.
-      if (room.game) {
-        delete room.game.players[socket.id];
-        if (room.game.leaderId === socket.id) {
-          room.game.leaderId = room.hostId;
-        }
-      }
-
       broadcastRoomUpdate(room);
       broadcastGameUpdate(room);
     } catch {
@@ -647,32 +874,41 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    for (const room of rooms.values()) {
-      if (!room.players.has(socket.id)) continue;
-      room.players.delete(socket.id);
-
-      if (room.players.size === 0) {
-        rooms.delete(room.code);
+    // Do not immediately remove seat on disconnect; allow quick reconnect.
+    clearDisconnectCleanup(socket.id);
+    const timer = setTimeout(() => {
+      pendingDisconnectCleanup.delete(socket.id);
+      for (const room of rooms.values()) {
+        if (!room.players.has(socket.id)) continue;
+        removePlayerFromRoom(room, socket.id);
+        broadcastRoomUpdate(room);
+        broadcastGameUpdate(room);
         break;
       }
-
-      if (room.hostId === socket.id) {
-        room.hostId = room.players.keys().next().value;
-      }
-
-      if (room.game) {
-        delete room.game.players[socket.id];
-        if (room.game.leaderId === socket.id) {
-          room.game.leaderId = room.hostId;
-        }
-      }
-
-      broadcastRoomUpdate(room);
-      broadcastGameUpdate(room);
-      break;
-    }
+    }, DISCONNECT_GRACE_MS);
+    pendingDisconnectCleanup.set(socket.id, timer);
   });
 });
+
+// --- Mongo connection ---
+const connectToDatabase = async () => {
+  const uri = process.env.DATABASE_URL;
+  if (!uri) {
+    throw new Error('Missing required env var DATABASE_URL');
+  }
+
+  mongoose.connection.on('error', (e) => {
+    console.error('Mongo connection error:', e);
+  });
+
+  // Cosmos DB for MongoDB requires TLS; typically encoded in the URI.
+  // We keep options conservative and let the URI drive TLS behavior.
+  await mongoose.connect(uri, {
+    serverSelectionTimeoutMS: 10000,
+    maxPoolSize: 10,
+  });
+  console.log('Mongo connected');
+};
 
 // 託管編譯後的靜態檔案 (Vite 預設輸出資料夾為 dist)
 app.use(express.static(path.join(__dirname, 'dist')));
@@ -682,6 +918,14 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-httpServer.listen(port, () => {
-  console.log(`王者圓桌伺服器已啟動，監聽端口：${port}`);
+const start = async () => {
+  await connectToDatabase();
+  httpServer.listen(port, () => {
+    console.log(`王者圓桌伺服器已啟動，監聽端口：${port}`);
+  });
+};
+
+start().catch((e) => {
+  console.error('Failed to start server:', e);
+  process.exit(1);
 });

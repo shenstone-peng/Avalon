@@ -56,11 +56,19 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       onNavigate(ViewState.GAME);
     };
 
+    const onConnectError = (err: any) => {
+      if (err?.message === 'UNAUTHORIZED') {
+        window.alert('請先登入後再加入房間');
+        onNavigate(ViewState.HOME);
+      }
+    };
+
     socket.on('room_joined', onJoined);
     socket.on('room_update', onRoomUpdate);
     socket.on('room_error', onRoomError);
     socket.on('game_state', onGameState);
     socket.on('connect', onConnect);
+    socket.on('connect_error', onConnectError);
 
     const codeFromUrl = initialRoomCode || new URLSearchParams(window.location.search).get('room');
     if (codeFromUrl) {
@@ -75,6 +83,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       socket.off('room_error', onRoomError);
       socket.off('game_state', onGameState);
       socket.off('connect', onConnect);
+      socket.off('connect_error', onConnectError);
     };
   }, [initialRoomCode, onNavigate, playerName, socket]);
 
