@@ -2,12 +2,31 @@ import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
+export const setSocketAuthToken = (token: string | null) => {
+  if (!socket) return;
+  socket.auth = token ? { token } : {};
+  // Force reconnect to apply auth changes.
+  try {
+    socket.disconnect();
+  } catch {
+    // ignore
+  }
+  try {
+    socket.connect();
+  } catch {
+    // ignore
+  }
+};
+
 export const getSocket = (): Socket => {
   if (socket) return socket;
 
   // In dev, Vite proxies /socket.io to http://localhost:3000
   // In prod, this connects to same-origin where server.js serves dist.
   socket = io({
+    auth: {
+      token: localStorage.getItem('auth_token') || undefined,
+    },
     // Allow fallback when WebSockets are disabled/limited (common on some hosts/plans).
     transports: ['websocket', 'polling'],
     autoConnect: true,

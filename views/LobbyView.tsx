@@ -56,11 +56,19 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       onNavigate(ViewState.GAME);
     };
 
+    const onConnectError = (err: any) => {
+      if (err?.message === 'UNAUTHORIZED') {
+        window.alert('請先登入後再加入房間');
+        onNavigate(ViewState.HOME);
+      }
+    };
+
     socket.on('room_joined', onJoined);
     socket.on('room_update', onRoomUpdate);
     socket.on('room_error', onRoomError);
     socket.on('game_state', onGameState);
     socket.on('connect', onConnect);
+    socket.on('connect_error', onConnectError);
 
     const codeFromUrl = initialRoomCode || new URLSearchParams(window.location.search).get('room');
     if (codeFromUrl) {
@@ -75,6 +83,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       socket.off('room_error', onRoomError);
       socket.off('game_state', onGameState);
       socket.off('connect', onConnect);
+      socket.off('connect_error', onConnectError);
     };
   }, [initialRoomCode, onNavigate, playerName, socket]);
 
@@ -125,10 +134,26 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       }
   };
 
+  const clearRoomFromUrl = () => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="flex flex-col h-[100dvh] pt-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <div className="flex items-center justify-between mb-8">
-        <button onClick={() => onNavigate(ViewState.HOME)} className="p-2 text-slate-400 hover:text-white">
+        <button
+          onClick={() => {
+            clearRoomFromUrl();
+            onNavigate(ViewState.HOME);
+          }}
+          className="p-2 text-slate-400 hover:text-white"
+        >
           <ArrowLeft />
         </button>
         <h2 className="font-cinzel font-bold text-xl">準備大廳</h2>

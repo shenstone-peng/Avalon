@@ -33,6 +33,16 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     const [netError, setNetError] = useState<string | null>(null);
     const [assassinationTargetId, setAssassinationTargetId] = useState<string | null>(null);
 
+    const clearRoomFromUrl = () => {
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('room');
+            window.history.replaceState({}, '', url.toString());
+        } catch {
+            // ignore
+        }
+    };
+
     useEffect(() => {
         const codeFromUrl = initialRoomCode || new URLSearchParams(window.location.search).get('room');
         if (codeFromUrl) setRoomCode(codeFromUrl);
@@ -375,7 +385,16 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                             再來一局
                         </Button>
                     )}
-                    <Button variant="gold" fullWidth onClick={() => onNavigate(ViewState.HOME)}>返回主頁</Button>
+                    <Button
+                        variant="gold"
+                        fullWidth
+                        onClick={() => {
+                            clearRoomFromUrl();
+                            onNavigate(ViewState.HOME);
+                        }}
+                    >
+                        返回主頁
+                    </Button>
 
                     {!amHost && (
                         <p className="text-center text-xs text-slate-400 italic">等待房主開始下一局…</p>
@@ -835,7 +854,12 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
 
        <button
         className="absolute top-4 left-4 p-2.5 bg-slate-800/90 rounded-full border border-slate-600 text-slate-400 z-50 hover:text-white hover:bg-slate-700 transition-colors shadow-lg"
-        onClick={() => { if(confirm('確定要離開遊戲？')) onNavigate(ViewState.HOME); }}
+        onClick={() => {
+            if (confirm('確定要離開遊戲？')) {
+                clearRoomFromUrl();
+                onNavigate(ViewState.HOME);
+            }
+        }}
        >
            <Swords size={20} />
        </button>

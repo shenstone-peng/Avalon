@@ -7,38 +7,170 @@ import { ProfileView } from './views/ProfileView';
 import { RulesView } from './views/RulesView';
 import { ViewState } from './types';
 import { Swords, Shield, ScrollText, User } from 'lucide-react';
+import { setSocketAuthToken } from './services/socket';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.HOME);
   const [playerName, setPlayerName] = useState("亞瑟王候選人");
   const [initialRoomCode, setInitialRoomCode] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
+
+  const isAuthed = Boolean(authToken);
+
+  const getNameFromJwt = (token: string): string | null => {
+    try {
+      const parts = token.split('.');
+      if (parts.length < 2) return null;
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+      const json = decodeURIComponent(
+        atob(padded)
+          .split('')
+          .map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`)
+          .join('')
+      );
+      const payload = JSON.parse(json);
+      const name = typeof payload?.name === 'string' ? payload.name.trim() : '';
+      return name ? name : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Load auth token from localStorage
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      setAuthToken(token);
+      setSocketAuthToken(token);
+      const name = getNameFromJwt(token);
+      if (name) setPlayerName(name);
+    }
+  }, []);
 
   // Check for room code in URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const roomCode = params.get('room');
-    if (roomCode) {
-      console.log("偵測到房間連結:", roomCode);
+    if (!roomCode) return;
+    console.log('偵測到房間連結:', roomCode);
+    // Require login before entering a room via invite link.
+    if (localStorage.getItem('auth_token')) {
       setInitialRoomCode(roomCode);
       setCurrentView(ViewState.LOBBY);
+    } else {
+      setPendingRoomCode(roomCode);
+      setCurrentView(ViewState.HOME);
     }
   }, []);
+
+  const handleAuthSuccess = (token: string) => {
+    localStorage.setItem('auth_token', token);
+    setAuthToken(token);
+    setSocketAuthToken(token);
+    const name = getNameFromJwt(token);
+    if (name) setPlayerName(name);
+    if (pendingRoomCode) {
+      setInitialRoomCode(pendingRoomCode);
+      setPendingRoomCode(null);
+      setCurrentView(ViewState.LOBBY);
+    }
+  };
+
+  const handleLogout = () => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('auth_token');
+    setAuthToken(null);
+    setSocketAuthToken(null);
+    setInitialRoomCode(null);
+    setPendingRoomCode(null);
+    setCurrentView(ViewState.HOME);
+  };
+
+  const handleCreateRoom = () => {
+    setInitialRoomCode(null);
+    setCurrentView(ViewState.LOBBY);
+  };
+
+  const handleJoinRoom = (roomCode: string) => {
+    setInitialRoomCode(roomCode);
+    setCurrentView(ViewState.LOBBY);
+  };
 
   // Simple router based on state
   const renderView = () => {
     switch (currentView) {
       case ViewState.HOME:
-        return <HomeView onNavigate={setCurrentView} playerName={playerName} onPlayerNameChange={setPlayerName} />;
+        return (
+          <HomeView
+            onNavigate={setCurrentView}
+            playerName={playerName}
+            onPlayerNameChange={setPlayerName}
+            isAuthed={isAuthed}
+            pendingRoomCode={pendingRoomCode}
+            onAuthSuccess={handleAuthSuccess}
+            onLogout={handleLogout}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+          />
+        );
       case ViewState.LOBBY:
-        return <LobbyView onNavigate={setCurrentView} playerName={playerName} initialRoomCode={initialRoomCode} />;
+        return isAuthed ? (
+          <LobbyView onNavigate={setCurrentView} playerName={playerName} initialRoomCode={initialRoomCode} />
+        ) : (
+          <HomeView
+            onNavigate={setCurrentView}
+            playerName={playerName}
+            onPlayerNameChange={setPlayerName}
+            isAuthed={false}
+            pendingRoomCode={initialRoomCode}
+            onAuthSuccess={handleAuthSuccess}
+            onLogout={handleLogout}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+          />
+        );
       case ViewState.GAME:
-        return <GameView onNavigate={setCurrentView} playerName={playerName} initialRoomCode={initialRoomCode} />;
+        return isAuthed ? (
+          <GameView onNavigate={setCurrentView} playerName={playerName} initialRoomCode={initialRoomCode} />
+        ) : (
+          <HomeView
+            onNavigate={setCurrentView}
+            playerName={playerName}
+            onPlayerNameChange={setPlayerName}
+            isAuthed={false}
+            pendingRoomCode={initialRoomCode}
+            onAuthSuccess={handleAuthSuccess}
+            onLogout={handleLogout}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+          />
+        );
       case ViewState.PROFILE:
         return <ProfileView onNavigate={setCurrentView} />;
       case ViewState.RULES:
         return <RulesView onNavigate={setCurrentView} />;
       default:
-        return <HomeView onNavigate={setCurrentView} playerName={playerName} onPlayerNameChange={setPlayerName} />;
+        return (
+          <HomeView
+            onNavigate={setCurrentView}
+            playerName={playerName}
+            onPlayerNameChange={setPlayerName}
+            isAuthed={isAuthed}
+            pendingRoomCode={pendingRoomCode}
+            onAuthSuccess={handleAuthSuccess}
+            onLogout={handleLogout}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+          />
+        );
     }
   };
 
