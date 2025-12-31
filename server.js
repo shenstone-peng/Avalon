@@ -59,6 +59,16 @@ const io = new SocketIOServer(httpServer, {
   },
 });
 
+mongoose.set('bufferCommands', false);
+
+const isDbReady = () => mongoose.connection.readyState === 1;
+
+const ensureDbReady = (res) => {
+  if (isDbReady()) return true;
+  res.status(503).json({ ok: false, message: 'Database not ready' });
+  return false;
+};
+
 // Require JWT for all socket connections (login required before entering rooms)
 io.use((socket, next) => {
   try {
@@ -110,6 +120,7 @@ const migrateGameSocketId = (game, oldId, newId) => {
 // --- Auth APIs (Mongo/Cosmos via Mongoose) ---
 app.post('/api/register', async (req, res) => {
   try {
+    if (!ensureDbReady(res)) return;
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
 
@@ -140,6 +151,7 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   try {
+    if (!ensureDbReady(res)) return;
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
 
@@ -168,6 +180,7 @@ app.post('/api/login', async (req, res) => {
 // --- Profile / Stats ---
 app.get('/api/profile', requireHttpAuth, async (req, res) => {
   try {
+    if (!ensureDbReady(res)) return;
     const userId = req.user?.sub?.toString?.() || req.user?.sub;
     if (!userId) return res.status(401).json({ ok: false, message: 'Unauthorized' });
 
@@ -262,6 +275,14 @@ app.get('/api/profile', requireHttpAuth, async (req, res) => {
     console.error('GET /api/profile failed:', err);
     return res.status(500).json({ ok: false, message: 'Server error' });
   }
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    dbReady: isDbReady(),
+    nodeEnv: process.env.NODE_ENV || 'unknown',
+  });
 });
 
 const MIN_PLAYERS = 5;
@@ -1081,10 +1102,24 @@ app.get('*', (req, res) => {
 });
 
 const start = async () => {
-  await connectToDatabase();
   httpServer.listen(port, () => {
     console.log(`王者圓桌伺服器已啟動，監聽端口：${port}`);
   });
+
+  // Connect to DB in background with retry.
+  let attempt = 0;
+  const loop = async () => {
+    attempt += 1;
+    try {
+      if (!isDbReady()) await connectToDatabase();
+    } catch (e) {
+      console.error(`Mongo connect attempt ${attempt} failed:`, e);
+      const delayMs = Math.min(60000, 1000 * Math.pow(2, Math.min(attempt, 6)));
+      setTimeout(loop, delayMs);
+      return;
+    }
+  };
+  loop();
 };
 
 start().catch((e) => {
