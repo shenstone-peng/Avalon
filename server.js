@@ -570,6 +570,8 @@ const startGameForRoom = (room) => {
   const playerIds = Array.from(room.players.keys());
   if (playerIds.length < MIN_PLAYERS || playerIds.length > MAX_PLAYERS) throw new Error('INVALID_PLAYER_COUNT');
 
+  const ladyOfLakeEnabled = playerIds.length === 10;
+
   // Randomize the first leader (captain). Subsequent leaders rotate as usual.
   const firstLeaderId = playerIds[Math.floor(Math.random() * playerIds.length)];
 
@@ -603,6 +605,7 @@ const startGameForRoom = (room) => {
     proposalAttempt: 1,
     manualWinner: null,
     assassinationTargetId: null,
+    ladyOfLakeEnabled,
     ladyOfLakeHolderId: null,
     ladyOfLakeHistory: [],
     ladyOfLakeTargetId: null,
@@ -619,12 +622,14 @@ const startGameForRoom = (room) => {
     })),
   };
 
-  // Lady of the Lake: initial holder is the player before the first leader.
-  const leaderIdx = playerIds.indexOf(firstLeaderId);
-  const initialIdx = (leaderIdx - 1 + playerIds.length) % playerIds.length;
-  const initialHolderId = playerIds[initialIdx];
-  room.game.ladyOfLakeHolderId = initialHolderId;
-  room.game.ladyOfLakeHistory = [initialHolderId];
+  if (ladyOfLakeEnabled) {
+    // Lady of the Lake: initial holder is the player before the first leader.
+    const leaderIdx = playerIds.indexOf(firstLeaderId);
+    const initialIdx = (leaderIdx - 1 + playerIds.length) % playerIds.length;
+    const initialHolderId = playerIds[initialIdx];
+    room.game.ladyOfLakeHolderId = initialHolderId;
+    room.game.ladyOfLakeHistory = [initialHolderId];
+  }
 };
 
 const allPlayers = (room) => Array.from(room.players.keys());
@@ -703,7 +708,10 @@ const finalizeMissionAndAdvance = (room) => {
 
   const { successes, fails } = computeWins(game.rounds);
   const shouldEnd = successes >= 3 || fails >= 3;
-  const shouldLady = !shouldEnd && LADY_OF_THE_LAKE_ROUND_INDEXES.includes(game.currentRoundIndex);
+  const shouldLady =
+    Boolean(game.ladyOfLakeEnabled) &&
+    !shouldEnd &&
+    LADY_OF_THE_LAKE_ROUND_INDEXES.includes(game.currentRoundIndex);
 
   if (shouldLady) {
     const roomCode = room.code;
@@ -755,7 +763,7 @@ const nextRoundFromReveal = (room, { skipLadyOfLake = false } = {}) => {
   }
 
   // Lady of the Lake triggers after missions 2, 3, 4 (round indexes 1,2,3) are revealed.
-  if (!skipLadyOfLake && LADY_OF_THE_LAKE_ROUND_INDEXES.includes(game.currentRoundIndex)) {
+  if (Boolean(game.ladyOfLakeEnabled) && !skipLadyOfLake && LADY_OF_THE_LAKE_ROUND_INDEXES.includes(game.currentRoundIndex)) {
     game.phase = 'LADY_OF_THE_LAKE';
     game.ladyOfLakeTargetId = null;
     game.ladyOfLakeResult = null;
@@ -1090,6 +1098,7 @@ io.on('connection', (socket) => {
     try {
       const room = ensureRoom(roomCode);
       const game = ensureGame(room);
+      if (!game.ladyOfLakeEnabled) return;
       if (game.phase !== 'LADY_OF_THE_LAKE') return;
       if (game.ladyOfLakeHolderId !== socket.id) return;
       if (typeof targetId !== 'string' || !targetId) return;
