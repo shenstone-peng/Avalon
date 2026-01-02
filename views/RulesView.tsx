@@ -18,7 +18,7 @@ export const RulesView: React.FC<Props> = ({ onNavigate }) => {
         </button>
         <h2 className="font-cinzel font-bold text-xl text-amber-500 flex items-center gap-2">
             <BookOpen size={20} />
-            <span>遊戲聖典</span>
+            <span>游戏圣典</span>
         </h2>
       </div>
 
@@ -28,14 +28,14 @@ export const RulesView: React.FC<Props> = ({ onNavigate }) => {
             className={`flex-1 py-4 text-sm font-bold tracking-widest transition-colors relative ${activeTab === 'config' ? 'text-amber-400 bg-slate-800' : 'text-slate-500 hover:text-slate-300'}`}
             onClick={() => setActiveTab('config')}
           >
-            人數配置
+                        人数配置
             {activeTab === 'config' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-amber-500"></div>}
           </button>
           <button
             className={`flex-1 py-4 text-sm font-bold tracking-widest transition-colors relative ${activeTab === 'lore' ? 'text-amber-400 bg-slate-800' : 'text-slate-500 hover:text-slate-300'}`}
             onClick={() => setActiveTab('lore')}
           >
-            角色圖鑑
+                        角色图鉴
             {activeTab === 'lore' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-amber-500"></div>}
           </button>
       </div>
@@ -49,15 +49,15 @@ export const RulesView: React.FC<Props> = ({ onNavigate }) => {
                 <div className="bg-slate-800/80 rounded-xl p-6 border border-slate-700">
                     <h3 className="font-cinzel text-lg text-slate-200 mb-4 flex items-center gap-2">
                         <Users size={20} className="text-blue-400" />
-                        陣營分配表
+                        阵营分配表
                     </h3>
                     <div className="overflow-hidden rounded-lg border border-slate-600">
                         <table className="w-full text-center text-sm">
                             <thead>
                                 <tr className="bg-slate-700 text-slate-200">
-                                    <th className="py-3 px-2 font-bold">總人數</th>
-                                    <th className="py-3 px-2 font-bold text-blue-400">正義陣營</th>
-                                    <th className="py-3 px-2 font-bold text-red-400">邪惡陣營</th>
+                                    <th className="py-3 px-2 font-bold">总人数</th>
+                                    <th className="py-3 px-2 font-bold text-blue-400">正义阵营</th>
+                                    <th className="py-3 px-2 font-bold text-red-400">邪恶阵营</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-700 bg-slate-800">
@@ -99,20 +99,20 @@ export const RulesView: React.FC<Props> = ({ onNavigate }) => {
                 <div className="bg-slate-800/80 rounded-xl p-6 border border-slate-700">
                     <h3 className="font-cinzel text-lg text-slate-200 mb-4 flex items-center gap-2">
                         <Zap size={20} className="text-amber-400" />
-                        建議角色配置
+                        建议角色配置
                     </h3>
                     <ul className="space-y-4 text-sm text-slate-300">
                         <li className="flex gap-3">
-                            <span className="font-bold text-white whitespace-nowrap">基礎場 (5-6人)：</span>
-                            <span className="text-slate-400">梅林、派西維爾、刺客、莫甘娜。其餘為忠臣與爪牙。</span>
+                            <span className="font-bold text-white whitespace-nowrap">基础场 (5-6人)：</span>
+                            <span className="text-slate-400">梅林、派西维尔、刺客、莫甘娜。其余为忠臣与爪牙。</span>
                         </li>
                         <li className="flex gap-3">
-                            <span className="font-bold text-white whitespace-nowrap">進階場 (7-8人)：</span>
-                            <span className="text-slate-400">加入莫德雷德（梅林看不到的壞人）增加正義方難度，或加入奧伯倫（不知道隊友的壞人）平衡局勢。</span>
+                            <span className="font-bold text-white whitespace-nowrap">进阶场 (7-8人)：</span>
+                            <span className="text-slate-400">加入莫德雷德（梅林看不到的坏人）增加正义方难度，或加入奥伯伦（不知道队友的坏人）平衡局势。</span>
                         </li>
                         <li className="flex gap-3">
-                            <span className="font-bold text-white whitespace-nowrap">大亂鬥 (9-10人)：</span>
-                            <span className="text-slate-400">所有特殊角色登場，考驗極致的邏輯與演技。</span>
+                            <span className="font-bold text-white whitespace-nowrap">大乱斗 (9-10人)：</span>
+                            <span className="text-slate-400">所有特殊角色登场，考验极致的逻辑与演技。</span>
                         </li>
                     </ul>
                 </div>
@@ -126,7 +126,7 @@ export const RulesView: React.FC<Props> = ({ onNavigate }) => {
                 {/* Good Faction */}
                 <div>
                     <h3 className="font-cinzel text-xl text-blue-400 mb-4 flex items-center gap-2 border-b border-blue-900/50 pb-2">
-                        <Shield size={24} /> 正義陣營 (Arthur's Loyalists)
+                        <Shield size={24} /> 正义阵营 (Arthur's Loyalists)
                     </h3>
                     <div className="space-y-4">
                         <LoreCard
@@ -134,21 +134,21 @@ export const RulesView: React.FC<Props> = ({ onNavigate }) => {
                             title="偉大的預言家"
                             icon={<Eye size={24} className="text-blue-300" />}
                             isGood={true}
-                            description="亞瑟王的導師，擁有洞察人心的魔法。在遊戲開始時，他能看到所有的壞人（除了莫德雷德）。但他的知識是個詛咒，因為如果他暴露身份，刺客將會在最後刺殺他，導致好人全盤皆輸。"
+                            description="亚瑟王的导师，拥有洞察人心的魔法。在游戏开始时，他能看到所有的坏人（除了莫德雷德）。但他的知识是个诅咒，因为如果他暴露身份，刺客将会在最后刺杀他，导致好人全盘皆输。"
                         />
                         <LoreCard
-                            name="派西維爾 (Percival)"
-                            title="圓桌騎士"
+                            name="派西维尔 (Percival)"
+                            title="圆桌骑士"
                             icon={<Shield size={24} className="text-blue-300" />}
                             isGood={true}
-                            description="忠誠而睿智的騎士，在尋找聖杯的途中獲得了啟示。遊戲開始時，他能看到「兩位梅林候選人」（真正的梅林與偽裝的莫甘娜），但不知道誰是誰。他的職責是保護梅林，並引導好人走向勝利。"
+                            description="忠诚而睿智的骑士，在寻找圣杯的途中获得了启示。游戏开始时，他能看到「两位梅林候选人」（真正的梅林与伪装的莫甘娜），但不知道谁是谁。他的职责是保护梅林，并引导好人走向胜利。"
                         />
                         <LoreCard
-                            name="亞瑟的忠臣 (Loyal Servant)"
-                            title="王國守護者"
+                            name="亚瑟的忠臣 (Loyal Servant)"
+                            title="王国守护者"
                             icon={<Users size={24} className="text-blue-300" />}
                             isGood={true}
-                            description="雖然沒有特殊能力，但他們擁有一顆赤誠之心。他們不知道誰是隊友，只能透過邏輯推理、觀察投票和發言來分辨敵我。他們是圓桌會議的基石。"
+                            description="虽然没有特殊能力，但他们拥有一颗赤诚之心。他们不知道谁是队友，只能通过逻辑推理、观察投票和发言来分辨敌我。他们是圆桌会议的基石。"
                         />
                     </div>
                 </div>
@@ -156,7 +156,7 @@ export const RulesView: React.FC<Props> = ({ onNavigate }) => {
                 {/* Evil Faction */}
                 <div>
                     <h3 className="font-cinzel text-xl text-red-500 mb-4 flex items-center gap-2 border-b border-red-900/50 pb-2">
-                        <Skull size={24} /> 邪惡陣營 (Minions of Mordred)
+                        <Skull size={24} /> 邪恶阵营 (Minions of Mordred)
                     </h3>
                     <div className="space-y-4">
                          <LoreCard
@@ -164,28 +164,28 @@ export const RulesView: React.FC<Props> = ({ onNavigate }) => {
                             title="黑暗女巫"
                             icon={<Zap size={24} className="text-red-300" />}
                             isGood={false}
-                            description="亞瑟王同母異父的姊姊，精通黑魔法。她在派西維爾眼中會顯示為「梅林」。她必須極力偽裝自己是真正的預言家，以迷惑派西維爾，讓好人陣營陷入混亂。"
+                            description="亚瑟王同母异父的姐姐，精通黑魔法。她在派西维尔眼中会显示为「梅林」。她必须极力伪装自己是真正的预言家，以迷惑派西维尔，让好人阵营陷入混乱。"
                         />
                         <LoreCard
                             name="刺客 (Assassin)"
                             title="暗影殺手"
                             icon={<Skull size={24} className="text-red-300" />}
                             isGood={false}
-                            description="冷酷無情的殺手，潛伏在陰影之中。如果好人陣營完成了三個任務，刺客將擁有最後的一擊機會：猜測誰是梅林。如果猜對，邪惡陣營反敗為勝。"
+                            description="冷酷无情的杀手，潜伏在阴影之中。如果好人阵营完成了三个任务，刺客将拥有最后的一击机会：猜测谁是梅林。如果猜对，邪恶阵营反败为胜。"
                         />
                         <LoreCard
                             name="莫德雷德 (Mordred)"
-                            title="背叛騎士"
+                            title="背叛骑士"
                             icon={<Shield size={24} className="text-red-300" />}
                             isGood={false}
-                            description="亞瑟王的私生子，最終的背叛者。他披著斗篷，連梅林的魔法之眼也無法看穿他。在梅林的視野中，莫德雷德顯示為好人。他是邪惡陣營最深的隱藏王牌。"
+                            description="亚瑟王的私生子，最终的背叛者。他披着斗篷，连梅林的魔法之眼也无法看穿他。在梅林的视野中，莫德雷德显示为好人。他是邪恶阵营最深的隐藏王牌。"
                         />
                          <LoreCard
-                            name="奧伯倫 (Oberon)"
+                            name="奥伯伦 (Oberon)"
                             title="妖精之王"
                             icon={<Eye size={24} className="text-red-300" />}
                             isGood={false}
-                            description="善變的妖精之王，雖然屬於邪惡陣營，但他獨來獨往。他看不到其他壞人隊友，其他壞人也看不到他（梅林看得到他）。他是一把雙刃劍，常常在不知情的情況下干擾雙方的計劃。"
+                            description="善变的妖精之王，虽然属于邪恶阵营，但他独来独往。他看不到其他坏人队友，其他坏人也看不到他（梅林看得到他）。他是一把双刃剑，常常在不知情的情况下干扰双方的计划。"
                         />
                     </div>
                 </div>

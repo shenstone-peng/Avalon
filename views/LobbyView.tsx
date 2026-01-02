@@ -58,7 +58,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
 
     const onConnectError = (err: any) => {
       if (err?.message === 'UNAUTHORIZED') {
-        window.alert('請先登入後再加入房間');
+        window.alert('请先登录后再加入房间');
         onNavigate(ViewState.HOME);
       }
     };
@@ -130,7 +130,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
       } catch (err) {
           console.error('Share failed:', err);
         const inviteUrl = `${window.location.origin}?room=${roomCode}`;
-        window.prompt('複製邀請連結：', inviteUrl);
+        window.prompt('复制邀请链接：', inviteUrl);
       }
   };
 
@@ -156,19 +156,19 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
         >
           <ArrowLeft />
         </button>
-        <h2 className="font-cinzel font-bold text-xl">準備大廳</h2>
+        <h2 className="font-cinzel font-bold text-xl">准备大厅</h2>
         <div className="w-10"></div> {/* Spacer */}
       </div>
 
       {/* Room Info */}
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center mb-6">
-         <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">房間號碼</p>
+         <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">房间号码</p>
          <div className="flex items-center justify-center gap-3">
            <span className="text-4xl font-mono text-amber-400 font-bold tracking-wider">{roomCode || '----'}</span>
              <button
                 onClick={handleCopyCode}
                 className="text-slate-500 hover:text-amber-400 transition-colors p-1"
-                title="複製房間號"
+                title="复制房间号"
             disabled={!roomCode}
              >
                  {copiedCode ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
@@ -179,20 +179,20 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
                 onClick={handleInvite}
                 className="flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-950/30 px-4 py-2 rounded-full border border-indigo-500/30 transition-all active:scale-95"
             >
-              <Copy size={14} /> {copiedInvite ? '已複製邀請連結' : '複製邀請連結'}
+              <Copy size={14} /> {copiedInvite ? '已复制邀请链接' : '复制邀请链接'}
             </button>
          </div>
       </div>
 
       {/* Nickname */}
       <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-4 mb-6">
-        <p className="text-slate-400 text-xs uppercase tracking-widest mb-2 text-center">你的暱稱</p>
+        <p className="text-slate-400 text-xs uppercase tracking-widest mb-2 text-center">你的昵称</p>
         <div className="flex gap-2">
           <input
             value={localName}
             onChange={(e) => setLocalName(e.target.value)}
             maxLength={20}
-            placeholder="輸入你的名字"
+            placeholder="输入你的名字"
             className="flex-1 px-3 py-2 rounded-lg bg-slate-900/80 border border-slate-700 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40"
           />
           <Button
@@ -205,7 +205,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
             }}
             disabled={!roomCode || !localName.trim()}
           >
-            套用
+            应用
           </Button>
         </div>
       </div>
@@ -251,14 +251,14 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
 
       <div className="mt-4 space-y-3">
             <p className="text-center text-xs text-slate-500">
-              至少需要 5 人才能開始遊戲（目前 {totalPlayers}/{maxPlayers}）
+              至少需要 5 人才能开始游戏（目前 {totalPlayers}/{maxPlayers}）
             </p>
           {error && (
             <p className="text-center text-xs text-rose-400">
-              {error === 'ROOM_NOT_FOUND' && '房間不存在或已關閉'}
-              {error === 'ROOM_FULL' && '房間已滿'}
-              {error === 'GAME_ALREADY_STARTED' && '遊戲已開始，無法加入'}
-              {error === 'NOT_ENOUGH_PLAYERS' && '人數不足，無法開始'}
+              {error === 'ROOM_NOT_FOUND' && '房间不存在或已关闭'}
+              {error === 'ROOM_FULL' && '房间已满'}
+              {error === 'GAME_ALREADY_STARTED' && '游戏已开始，无法加入'}
+              {error === 'NOT_ENOUGH_PLAYERS' && '人数不足，无法开始'}
             </p>
           )}
           <Button
@@ -267,7 +267,7 @@ export const LobbyView: React.FC<Props> = ({ onNavigate, playerName, initialRoom
             onClick={() => socket.emit('start_game', { roomCode })}
             disabled={!isHost || totalPlayers < 5 || !roomCode}
           >
-            {!isHost ? '等待房主開始...' : totalPlayers < 5 ? '等待玩家...' : '開始遊戲'}
+            {!isHost ? '等待房主开始...' : totalPlayers < 5 ? '等待玩家...' : '开始游戏'}
           </Button>
       </div>
     </div>

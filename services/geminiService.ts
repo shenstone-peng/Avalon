@@ -8,9 +8,9 @@ export const generateMissionStory = async (
     const teamNames = team.map((p) => p.name).join(', ');
     const failCount = round.missionResults.filter((r) => r === 'FAIL').length;
     if (success) {
-        return `戰報：${teamNames} 眾志成城，跨越艱險，任務終告成功。`;
+        return `战报：${teamNames} 众志成城，跨越艰险，任务终告成功。`;
     }
-    return `戰報：${teamNames} 暗流湧動，背叛在陰影中蔓延（失敗票數：${failCount}）。`;
+    return `战报：${teamNames} 暗流涌动，背叛在阴影中蔓延（失败票数：${failCount}）。`;
 };
 
 export const generateEndGameAnalysis = async (
@@ -22,5 +22,5 @@ export const generateEndGameAnalysis = async (
     const successCount = missionHistory.filter((r) => r.status === 'SUCCESS').length;
     const failCount = missionHistory.filter((r) => r.status === 'FAIL').length;
     const playerNames = players.map((p) => p.name).join(', ');
-    return `終局總結：${winnerAlliance} 取得勝利（任務成功 ${successCount}/${total}、失敗 ${failCount}）。參戰者：${playerNames}。`;
+    return `终局总结：${winnerAlliance} 取得胜利（任务成功 ${successCount}/${total}、失败 ${failCount}）。参战者：${playerNames}。`;
 };
