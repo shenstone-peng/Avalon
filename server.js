@@ -570,6 +570,9 @@ const startGameForRoom = (room) => {
   const playerIds = Array.from(room.players.keys());
   if (playerIds.length < MIN_PLAYERS || playerIds.length > MAX_PLAYERS) throw new Error('INVALID_PLAYER_COUNT');
 
+  // Randomize the first leader (captain). Subsequent leaders rotate as usual.
+  const firstLeaderId = playerIds[Math.floor(Math.random() * playerIds.length)];
+
   const roles = shuffle(getRolesDeckForCount(playerIds.length));
 
   const players = {};
@@ -594,7 +597,7 @@ const startGameForRoom = (room) => {
     startedAt: new Date().toISOString(),
     matchRecorded: false,
     phase: 'ROLE_REVEAL',
-    leaderId: room.hostId,
+    leaderId: firstLeaderId,
     currentRoundIndex: 0,
     selectedTeam: [],
     proposalAttempt: 1,
@@ -616,11 +619,10 @@ const startGameForRoom = (room) => {
     })),
   };
 
-  // Lady of the Lake: initial holder is the player before the first leader (host).
-  const ids = Array.from(room.players.keys());
-  const leaderIdx = ids.indexOf(room.hostId);
-  const initialIdx = (leaderIdx - 1 + ids.length) % ids.length;
-  const initialHolderId = ids[initialIdx];
+  // Lady of the Lake: initial holder is the player before the first leader.
+  const leaderIdx = playerIds.indexOf(firstLeaderId);
+  const initialIdx = (leaderIdx - 1 + playerIds.length) % playerIds.length;
+  const initialHolderId = playerIds[initialIdx];
   room.game.ladyOfLakeHolderId = initialHolderId;
   room.game.ladyOfLakeHistory = [initialHolderId];
 };

@@ -180,7 +180,8 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
       // Oberon 看不到隊友
       if (observer.role.alliance === Alliance.EVIL && obsType !== RoleType.OBERON) {
           if (targetAlliance === Alliance.EVIL && targetType !== RoleType.OBERON) {
-              return { icon: <Skull size={16} />, text: '同夥', type: 'evil' };
+              // Evil players (except Oberon) know each other as specific roles.
+              return { icon: <Skull size={16} />, text: target.role.name, type: 'evil' };
           }
       }
 
@@ -571,6 +572,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     const iAmLeader = phase === GamePhase.TEAM_SELECTION && leaderId === myPlayerId;
     const iAmAssassin = phase === GamePhase.ASSASSINATION && myPlayer?.role?.type === RoleType.ASSASSIN;
     const hasAssassin = players.some((p) => p.role?.type === RoleType.ASSASSIN);
+    const iAmEvil = myPlayer?.role?.alliance === Alliance.EVIL;
 
     return (
         <div className="h-[100dvh] flex flex-col relative overflow-hidden bg-slate-950">
@@ -689,6 +691,9 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                                  `}>
                                      <div className="flex flex-col items-center">
                                          {visionInfo.type === 'evil' && <Skull size={24} className="text-red-500 animate-pulse drop-shadow-md" />}
+                                         {visionInfo.type === 'evil' && visionInfo.text !== '邪惡陣營' && (
+                                           <span className="mt-1 text-[9px] leading-none font-bold text-red-300">{visionInfo.text}</span>
+                                         )}
                                          {visionInfo.type === 'unknown' && <HelpCircle size={24} className="text-amber-400 drop-shadow-md" />}
                                      </div>
                                  </div>
@@ -869,6 +874,11 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                {phase === GamePhase.MISSION_EXECUTION && selectedTeam.includes(myPlayerId) && players.find(p => p.id === myPlayerId)?.missionAction === null && (
                    <div className="animate-[slideUp_0.3s]">
                         <p className="text-center text-sm text-slate-300 mb-3 font-bold">請秘密執行任務卡</p>
+                        {players.find(p => p.id === myPlayerId)?.role?.alliance === Alliance.EVIL && (
+                            <div className="mb-3 text-center text-xs text-red-200 bg-red-950/20 border border-red-900/50 rounded-lg px-3 py-2">
+                                提示：壞人出牌優先級：刺客 &gt; 莫甘娜 &gt; 莫德雷德
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 gap-4">
                             <Button variant="primary" onClick={() => handleMissionAction('SUCCESS')} className="h-16 text-lg bg-blue-700 border-blue-500">
                                 任務成功
