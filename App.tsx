@@ -11,7 +11,7 @@ import { setSocketAuthToken } from './services/socket';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.HOME);
-  const [playerName, setPlayerName] = useState("亞瑟王候選人");
+  const [playerName, setPlayerName] = useState("亚瑟王候选人");
   const [initialRoomCode, setInitialRoomCode] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const roomCode = params.get('room');
     if (!roomCode) return;
-    console.log('偵測到房間連結:', roomCode);
+    console.log('检测到房间链接:', roomCode);
     // Require login before entering a room via invite link.
     if (localStorage.getItem('auth_token')) {
       setInitialRoomCode(roomCode);
@@ -188,10 +188,10 @@ export default function App() {
       {currentView !== ViewState.GAME && (
         <nav className="fixed bottom-0 left-0 w-full bg-slate-900/90 backdrop-blur-md border-t border-slate-700 z-50 pb-safe">
           <div className="flex justify-around items-center p-3">
-            <NavBtn icon={<Swords size={20} />} label="對戰" active={currentView === ViewState.HOME || currentView === ViewState.LOBBY} onClick={() => setCurrentView(ViewState.HOME)} />
-            <NavBtn icon={<ScrollText size={20} />} label="規則" active={currentView === ViewState.RULES} onClick={() => setCurrentView(ViewState.RULES)} />
-            <NavBtn icon={<Shield size={20} />} label="排位" active={false} onClick={() => alert('賽季排位即將開啟')} />
-            <NavBtn icon={<User size={20} />} label="戰績" active={currentView === ViewState.PROFILE} onClick={() => setCurrentView(ViewState.PROFILE)} />
+            <NavBtn icon={<Swords size={20} />} label="对战" active={currentView === ViewState.HOME || currentView === ViewState.LOBBY} onClick={() => setCurrentView(ViewState.HOME)} />
+            <NavBtn icon={<ScrollText size={20} />} label="规则" active={currentView === ViewState.RULES} onClick={() => setCurrentView(ViewState.RULES)} />
+            <NavBtn icon={<Shield size={20} />} label="排位" active={false} onClick={() => alert('赛季排位即将开启')} />
+            <NavBtn icon={<User size={20} />} label="战绩" active={currentView === ViewState.PROFILE} onClick={() => setCurrentView(ViewState.PROFILE)} />
           </div>
         </nav>
       )}

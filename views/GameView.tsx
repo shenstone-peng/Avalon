@@ -160,10 +160,10 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
       const targetAlliance = target.role.alliance;
 
       // 1. 梅林 (Merlin)
-      // 看到：Morgana, Assassin, Minion, Oberon 為壞人 (但看不到 Mordred)
+    // 看到：Morgana, Assassin, Minion, Oberon 为坏人（但看不到 Mordred）
       if (obsType === RoleType.MERLIN) {
           if (targetAlliance === Alliance.EVIL && targetType !== RoleType.MORDRED) {
-              return { icon: <Skull size={16} />, text: '邪惡陣營', type: 'evil' };
+              return { icon: <Skull size={16} />, text: '邪恶阵营', type: 'evil' };
           }
       }
 
@@ -175,9 +175,9 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
           }
       }
 
-      // 3. 壞人視野 (Evil)
-      // 看到：其他壞人 (除了 Oberon)
-      // Oberon 看不到隊友
+    // 3. 坏人视野 (Evil)
+    // 看到：其他坏人（除了 Oberon）
+    // Oberon 看不到队友
       if (observer.role.alliance === Alliance.EVIL && obsType !== RoleType.OBERON) {
           if (targetAlliance === Alliance.EVIL && targetType !== RoleType.OBERON) {
               // Evil players (except Oberon) know each other as specific roles.
@@ -190,15 +190,15 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
 
   const getRoleDescription = (roleType: RoleType) => {
       switch (roleType) {
-          case RoleType.MERLIN: return "你能看穿大部分邪惡陣營的偽裝（除了莫德雷德）。";
+          case RoleType.MERLIN: return "你能看穿大部分邪恶阵营的伪装（除了莫德雷德）。";
           case RoleType.PERCIVAL: return "你能看到梅林與莫甘娜，但無法區分誰是真梅林。";
-          case RoleType.OBERON: return "你無法看到你的邪惡隊友，隊友也看不到你。";
+          case RoleType.OBERON: return "你无法看到你的邪恶队友，队友也看不到你。";
           case RoleType.MORDRED:
           case RoleType.MORGANA:
           case RoleType.ASSASSIN:
           case RoleType.MINION:
-              return "你能看到你的邪惡同夥（除了奧伯倫）。";
-          default: return "你沒有特殊視野，只能依靠信任與邏輯。";
+              return "你能看到你的邪恶同伙（除了奥伯伦）。";
+          default: return "你没有特殊视野，只能依靠信任与逻辑。";
       }
   };
 
@@ -256,7 +256,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
 
         setIsProcessingAI(true);
         const analysis = await generateEndGameAnalysis(
-            winner === Alliance.GOOD ? "正義陣營 (藍方)" : "邪惡陣營 (紅方)",
+            winner === Alliance.GOOD ? "正义阵营 (蓝方)" : "邪恶阵营 (红方)",
             players,
             rounds
         );
@@ -281,12 +281,12 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                 <Waves size={40} className="text-white" />
             </div>
 
-            <h2 className="text-3xl font-cinzel font-bold text-blue-400 mb-2">湖中仙女的啟示</h2>
+            <h2 className="text-3xl font-cinzel font-bold text-blue-400 mb-2">湖中仙女的启示</h2>
 
             {!ladyOfLakeTargetId ? (
                 <div className="max-w-md w-full">
                     <p className="text-slate-300 mb-8">
-                        {isMeHolder ? '你是湖中仙女的持有者。請選擇一名未曾持有過令牌的玩家，窺視其陣營。' : `等待持有者 ${holder?.name || '玩家'} 選擇窺視目標...`}
+                        {isMeHolder ? '你是湖中仙女的持有者。请选择一名未曾持有过令牌的玩家，窥视其阵营。' : `等待持有者 ${holder?.name || '玩家'} 选择窥视目标...`}
                     </p>
 
                     {isMeHolder && (
@@ -319,16 +319,16 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                                 ${ladyOfLakeResult === 'GOOD' ? 'bg-blue-900/50 border-blue-400 text-blue-300' : 'bg-red-900/50 border-red-500 text-red-300'}
                             `}>
                                 <Waves size={20} />
-                                {ladyOfLakeResult === 'GOOD' ? '正義陣營' : '邪惡陣營'}
+                                {ladyOfLakeResult === 'GOOD' ? '正义阵营' : '邪恶阵营'}
                             </div>
                         ) : (
                             <div className="py-4 px-6 rounded-full bg-slate-800 border border-slate-700 text-slate-400 italic">
-                                你無法得知其陣營…
+                                你无法得知其阵营…
                             </div>
                         )}
 
                         <p className="mt-6 text-sm text-slate-400">
-                            令牌將自動移交給 {target?.name}。
+                            令牌将自动移交给 {target?.name}。
                         </p>
                     </div>
                 </div>
@@ -349,7 +349,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
       return (
         <div className="fixed inset-0 z-50 bg-slate-950 overflow-y-auto overscroll-contain animate-[fadeIn_0.5s]">
             <div className="min-h-[100dvh] flex flex-col items-center px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <h2 className="text-2xl font-cinzel text-amber-500 mb-6">確認你的身份</h2>
+            <h2 className="text-2xl font-cinzel text-amber-500 mb-6">确认你的身份</h2>
 
             <div className="flex flex-col md:flex-row items-center gap-8 max-w-5xl w-full justify-center">
                 {/* My Card */}
@@ -365,7 +365,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                 <div className={`w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl transition-all duration-500 ${showRole ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none'}`}>
                     <h3 className="font-cinzel text-xl text-slate-300 mb-2 flex items-center gap-2 border-b border-slate-700 pb-3">
                         <Eye size={24} className="text-amber-500" />
-                        <span>視野情報</span>
+                        <span>视野信息</span>
                     </h3>
                     <p className="text-sm text-slate-400 mb-4 italic">
                         {myPlayer.role ? getRoleDescription(myPlayer.role.type) : ''}
@@ -394,18 +394,18 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                         <div className="text-center py-8 bg-slate-800/50 rounded-lg border border-slate-800 border-dashed">
                             <Eye size={32} className="text-slate-600 mx-auto mb-2" />
                             <p className="text-slate-500 italic">
-                                你的視野一片漆黑...<br/>
-                                <span className="text-xs mt-1 block">你無法確認任何人的身份</span>
+                                你的视野一片漆黑...<br/>
+                                <span className="text-xs mt-1 block">你无法确认任何人的身份</span>
                             </p>
                         </div>
                     )}
 
                     <div className="mt-6 p-4 bg-indigo-900/20 rounded border border-indigo-500/30">
-                        <h4 className="text-indigo-400 font-bold text-sm mb-1">獲勝條件</h4>
+                        <h4 className="text-indigo-400 font-bold text-sm mb-1">获胜条件</h4>
                         <p className="text-sm text-indigo-300 leading-relaxed">
                             {myPlayer.role?.alliance === Alliance.GOOD
-                                ? "協助隊伍完成 3 個任務，並確保梅林不被刺客識破。"
-                                : "破壞 3 個任務，或在任務失敗後找出並刺殺梅林。"}
+                                ? "协助队伍完成 3 个任务，并确保梅林不被刺客识破。"
+                                : "破坏 3 个任务，或在任务失败后找出并刺杀梅林。"}
                         </p>
                     </div>
                 </div>
@@ -425,7 +425,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                         disabled={!showRole || roleAcked}
                         className="px-12 text-lg"
                     >
-                        {!showRole ? '請翻開卡片查看身份' : roleAcked ? '等待其他玩家...' : '進入遊戲'}
+                        {!showRole ? '请翻开卡片查看身份' : roleAcked ? '等待其他玩家...' : '进入游戏'}
                     </Button>
                 </div>
             </div>
@@ -439,7 +439,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
         {isProcessingAI ? (
              <div className="animate-pulse flex flex-col items-center gap-4">
                  <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                 <p className="font-cinzel text-xl text-amber-400 tracking-widest">吟遊詩人正在撰寫史詩...</p>
+                 <p className="font-cinzel text-xl text-amber-400 tracking-widest">吟游诗人正在撰写史诗...</p>
              </div>
         ) : phase === GamePhase.GAME_OVER ? (
             // GAME OVER SCREEN
@@ -448,12 +448,12 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                     {manualWinner === Alliance.GOOD ? <Crown size={80} className="text-blue-400 mx-auto drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" /> : <Skull size={80} className="text-red-500 mx-auto drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]" />}
                 </div>
                 <h2 className={`text-6xl font-cinzel font-bold mb-2 ${manualWinner === Alliance.GOOD ? 'text-blue-400' : 'text-red-500'}`}>
-                    {manualWinner === Alliance.GOOD ? '正義獲勝' : '邪惡獲勝'}
+                    {manualWinner === Alliance.GOOD ? '正义获胜' : '邪恶获胜'}
                 </h2>
 
                 <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 shadow-2xl mb-8 max-h-60 overflow-y-auto">
                     <p className="font-serif text-slate-300 italic text-lg leading-relaxed text-left">
-                        {narrative || "歷史已經蓋棺論定。"}
+                        {narrative || "历史已经盖棺论定。"}
                     </p>
                 </div>
 
@@ -467,7 +467,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                                 socket.emit('restart_game', { roomCode });
                             }}
                         >
-                            再來一局
+                            再来一局
                         </Button>
                     )}
                     <Button
@@ -478,19 +478,19 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                             onNavigate(ViewState.HOME);
                         }}
                     >
-                        返回主頁
+                        返回主页
                     </Button>
 
                     {!amHost && (
-                        <p className="text-center text-xs text-slate-400 italic">等待房主開始下一局…</p>
+                        <p className="text-center text-xs text-slate-400 italic">等待房主开始下一局…</p>
                     )}
                     {/* Allow Host to change result if needed even after game over */}
                     {amHost && (
                         <div className="pt-4 border-t border-slate-800">
                              <p className="text-xs text-slate-500 mb-2">房主判定修正</p>
                              <div className="flex gap-2 justify-center">
-                                 <button onClick={() => handleManualEndGame(Alliance.GOOD)} className="text-xs px-3 py-1 bg-blue-900 text-blue-300 rounded hover:bg-blue-800">改判正義勝</button>
-                                 <button onClick={() => handleManualEndGame(Alliance.EVIL)} className="text-xs px-3 py-1 bg-red-900 text-red-300 rounded hover:bg-red-800">改判邪惡勝</button>
+                                 <button onClick={() => handleManualEndGame(Alliance.GOOD)} className="text-xs px-3 py-1 bg-blue-900 text-blue-300 rounded hover:bg-blue-800">改判正义胜</button>
+                                 <button onClick={() => handleManualEndGame(Alliance.EVIL)} className="text-xs px-3 py-1 bg-red-900 text-red-300 rounded hover:bg-red-800">改判邪恶胜</button>
                              </div>
                         </div>
                     )}
@@ -500,7 +500,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
             // MISSION REVEAL SCREEN
             <div className="max-w-md w-full">
                 <h2 className={`text-5xl font-cinzel font-bold mb-8 ${rounds[currentRoundIndex].status === 'SUCCESS' ? 'text-blue-400' : 'text-red-500'}`}>
-                    {rounds[currentRoundIndex].status === 'SUCCESS' ? '任務成功' : '任務失敗'}
+                    {rounds[currentRoundIndex].status === 'SUCCESS' ? '任务成功' : '任务失败'}
                 </h2>
 
                 <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 shadow-2xl mb-8">
@@ -548,20 +548,20 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
       return (
           <div className="h-screen flex flex-col items-center justify-center bg-slate-950 px-6 text-center">
               <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-6" />
-              <h2 className="font-cinzel text-xl text-amber-400 mb-2">正在同步遊戲狀態…</h2>
+              <h2 className="font-cinzel text-xl text-amber-400 mb-2">正在同步游戏状态…</h2>
               <p className="text-sm text-slate-400">
                   {netError
-                      ? `連線錯誤：${netError}`
+                      ? `连接错误：${netError}`
                       : roomCode
                           ? `房間：${roomCode}`
-                          : '尚未取得房間資訊'}
+                          : '尚未取得房间信息'}
               </p>
               <div className="mt-6 w-full max-w-xs space-y-3">
                   <Button variant="gold" fullWidth onClick={() => roomCode && socket.emit('get_game_state', { roomCode })} disabled={!roomCode}>
-                      重新取得狀態
+                      重新获取状态
                   </Button>
                   <Button variant="secondary" fullWidth onClick={() => onNavigate(ViewState.LOBBY)}>
-                      返回大廳
+                      返回大厅
                   </Button>
               </div>
           </div>
@@ -609,26 +609,26 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                {phase === GamePhase.TEAM_SELECTION && (
                    <>
                         <Swords size={32} className="text-amber-600 mb-2 animate-pulse" />
-                        <span className="text-amber-200 text-sm font-cinzel">等待隊長<br/>選擇隊伍</span>
+                                    <span className="text-amber-200 text-sm font-cinzel">等待队长<br/>选择队伍</span>
                    </>
                )}
                {phase === GamePhase.VOTING && (
                    <>
                         <Gavel size={32} className="text-slate-300 mb-2 animate-bounce" />
-                        <span className="text-white font-bold text-lg">全員投票中</span>
+                        <span className="text-white font-bold text-lg">全员投票中</span>
                         <span className="text-[10px] text-slate-400 mt-1">提案投票：第 {proposalAttempt}/5 次</span>
                    </>
                )}
                {phase === GamePhase.MISSION_EXECUTION && (
                    <>
                         <ShieldAlert size={32} className="text-red-400 mb-2 animate-pulse" />
-                        <span className="text-red-300 font-bold text-lg">任務執行中</span>
+                        <span className="text-red-300 font-bold text-lg">任务执行中</span>
                    </>
                )}
                {phase === GamePhase.ASSASSINATION && (
                    <>
                         <Skull size={40} className="text-red-600 mb-2 animate-pulse" />
-                        <span className="text-red-500 font-bold text-lg font-cinzel">刺客現身</span>
+                        <span className="text-red-500 font-bold text-lg font-cinzel">刺客现身</span>
                         <span className="text-xs text-red-300 mt-1">尋找梅林...</span>
                    </>
                )}
@@ -668,7 +668,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                     onClick={() => {
                        if (phase !== GamePhase.TEAM_SELECTION) return;
                        if (!iAmLeader) {
-                          setNetError('只有隊長可以選人');
+                                  setNetError('只有队长可以选人');
                           setTimeout(() => setNetError(null), 1500);
                           return;
                        }
@@ -691,7 +691,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                                  `}>
                                      <div className="flex flex-col items-center">
                                          {visionInfo.type === 'evil' && <Skull size={24} className="text-red-500 animate-pulse drop-shadow-md" />}
-                                         {visionInfo.type === 'evil' && visionInfo.text !== '邪惡陣營' && (
+                                         {visionInfo.type === 'evil' && visionInfo.text !== '邪恶阵营' && (
                                            <span className="mt-1 text-[9px] leading-none font-bold text-red-300">{visionInfo.text}</span>
                                          )}
                                          {visionInfo.type === 'unknown' && <HelpCircle size={24} className="text-amber-400 drop-shadow-md" />}
@@ -724,7 +724,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                                             : 'bg-rose-950 text-rose-300 border-rose-700'
                                         }
                                     `}
-                                    title={roundVote === 'APPROVE' ? '贊成' : '否決'}
+                                    title={roundVote === 'APPROVE' ? '赞成' : '否决'}
                                 >
                                     {roundVote === 'APPROVE' ? <CheckCircle size={14} /> : <XCircle size={14} />}
                                 </div>
@@ -761,11 +761,11 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
            <div className="absolute bottom-36 left-0 w-full z-40 px-4 animate-[slideUp_0.5s]">
                <div className="bg-slate-900/95 border border-amber-500/50 rounded-xl p-4 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-center">
                    <h3 className="font-cinzel text-amber-500 font-bold text-lg mb-2 flex items-center justify-center gap-2">
-                       <Gavel size={20} /> 房主裁決時刻
+                       <Gavel size={20} /> 房主裁决时刻
                    </h3>
 
                    <p className="text-slate-300 text-sm mb-4">
-                       未偵測到刺客角色。請由房主手動判定最終勝負。
+                       未检测到刺客角色。请由房主手动判定最终胜负。
                    </p>
 
                    <div className="grid grid-cols-2 gap-3">
@@ -773,15 +773,15 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                             onClick={() => handleManualEndGame(Alliance.EVIL)}
                             className="bg-red-900/80 hover:bg-red-800 text-red-100 border border-red-600 py-3 rounded-lg font-bold flex flex-col items-center gap-1"
                         >
-                            <span>⚔️ 刺殺成功</span>
-                            <span className="text-[10px] opacity-70">邪惡陣營獲勝</span>
+                            <span>⚔️ 刺杀成功</span>
+                            <span className="text-[10px] opacity-70">邪恶阵营获胜</span>
                         </button>
                         <button
                             onClick={() => handleManualEndGame(Alliance.GOOD)}
                             className="bg-blue-900/80 hover:bg-blue-800 text-blue-100 border border-blue-500 py-3 rounded-lg font-bold flex flex-col items-center gap-1"
                         >
-                            <span>🛡️ 刺殺失敗</span>
-                            <span className="text-[10px] opacity-70">正義陣營獲勝</span>
+                            <span>🛡️ 刺杀失败</span>
+                            <span className="text-[10px] opacity-70">正义阵营获胜</span>
                         </button>
                    </div>
                </div>
@@ -792,7 +792,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
        {(phase === GamePhase.ASSASSINATION) && !iAmAssassin && (
            <div className="absolute bottom-36 left-0 w-full z-40 px-4 text-center">
                <div className="bg-black/60 backdrop-blur-md rounded-lg p-3 inline-block border border-slate-700">
-                   <p className="text-amber-400 animate-pulse font-cinzel">等待刺客刺殺梅林...</p>
+                   <p className="text-amber-400 animate-pulse font-cinzel">等待刺客刺杀梅林...</p>
                </div>
            </div>
        )}
@@ -812,7 +812,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                    <div className="flex flex-col gap-3 animate-[slideUp_0.3s]">
                        <p className="text-center text-sm text-amber-500 font-bold flex items-center justify-center gap-2">
                            <Crown size={16} />
-                           你是隊長，請選擇 {rounds[currentRoundIndex].playersRequired} 名隊員
+                               你是队长，请选择 {rounds[currentRoundIndex].playersRequired} 名队员
                        </p>
                        <Button
                         variant="gold"
@@ -820,13 +820,13 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                         onClick={submitTeam}
                         disabled={selectedTeam.length !== rounds[currentRoundIndex].playersRequired}
                        >
-                           確認派出 ({selectedTeam.length}/{rounds[currentRoundIndex].playersRequired})
+                               确认派出 ({selectedTeam.length}/{rounds[currentRoundIndex].playersRequired})
                        </Button>
                    </div>
                )}
                {phase === GamePhase.TEAM_SELECTION && players[leaderIndex].id !== myPlayerId && (
                    <div className="text-center space-y-2 animate-pulse">
-                        <p className="text-slate-400 text-sm">等待隊長 {players[leaderIndex].name} 進行決策...</p>
+                        <p className="text-slate-400 text-sm">等待队长 {players[leaderIndex].name} 进行决策...</p>
                         <div className="flex justify-center gap-1">
                             <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{animationDelay: '0s'}}></span>
                             <span className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
@@ -844,12 +844,12 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                        <div className="space-y-3 animate-[slideUp_0.3s]">
                            {isForced && (
                                <div className="text-center text-xs text-rose-200 bg-rose-950/30 border border-rose-800/40 rounded-lg px-3 py-2">
-                                   <span className="font-bold">強制輪（第 5 次提案）</span>：好人必須投「贊成」。若第 5 次仍被否決，邪惡陣營直接獲勝。
+                                   <span className="font-bold">强制轮（第 5 次提案）</span>：好人必须投「赞成」。若第 5 次仍被否决，邪恶阵营直接获胜。
                                </div>
                            )}
                            <div className="grid grid-cols-2 gap-4">
                                <Button variant="primary" onClick={() => handleVote('APPROVE')} className="bg-indigo-600 hover:bg-indigo-500">
-                                   <CheckCircle size={20} className="mr-2"/> 贊成出發
+                                   <CheckCircle size={20} className="mr-2"/> 赞成出发
                                </Button>
                                <Button
                                    variant="danger"
@@ -857,11 +857,11 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                                    disabled={mustApprove}
                                    className={mustApprove ? 'bg-slate-800 opacity-50 cursor-not-allowed' : 'bg-rose-700 hover:bg-rose-600'}
                                >
-                                   <XCircle size={20} className="mr-2"/> 否決提案
+                                   <XCircle size={20} className="mr-2"/> 否决提案
                                </Button>
                            </div>
                            {mustApprove && (
-                               <p className="text-center text-xs text-slate-400 italic">你是好人：本輪被規則強制投贊成。</p>
+                               <p className="text-center text-xs text-slate-400 italic">你是好人：本轮被规则强制投赞成。</p>
                            )}
                        </div>
                    );
@@ -873,25 +873,25 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                {/* Mission Actions */}
                {phase === GamePhase.MISSION_EXECUTION && selectedTeam.includes(myPlayerId) && players.find(p => p.id === myPlayerId)?.missionAction === null && (
                    <div className="animate-[slideUp_0.3s]">
-                        <p className="text-center text-sm text-slate-300 mb-3 font-bold">請秘密執行任務卡</p>
+                        <p className="text-center text-sm text-slate-300 mb-3 font-bold">请秘密执行任务卡</p>
                         {players.find(p => p.id === myPlayerId)?.role?.alliance === Alliance.EVIL && (
                             <div className="mb-3 text-center text-xs text-red-200 bg-red-950/20 border border-red-900/50 rounded-lg px-3 py-2">
-                                提示：壞人出牌優先級：刺客 &gt; 莫甘娜 &gt; 莫德雷德
+                                提示：坏人出牌优先级：刺客 &gt; 莫甘娜 &gt; 莫德雷德
                             </div>
                         )}
                         <div className="grid grid-cols-2 gap-4">
                             <Button variant="primary" onClick={() => handleMissionAction('SUCCESS')} className="h-16 text-lg bg-blue-700 border-blue-500">
-                                任務成功
+                                任务成功
                             </Button>
                             {/* Only Evil can fail */}
                             {players.find(p => p.id === myPlayerId)?.role?.alliance === Alliance.EVIL ? (
                                 <Button variant="danger" onClick={() => handleMissionAction('FAIL')} className="h-16 text-lg bg-red-700 border-red-500">
-                                    任務失敗
+                                    任务失败
                                 </Button>
                             ) : (
                                 <Button variant="secondary" disabled className="h-16 opacity-40 cursor-not-allowed border-dashed">
-                                    <span className="line-through text-sm">任務失敗</span>
-                                    <span className="block text-[10px] text-slate-400">(好人無法失敗)</span>
+                                    <span className="line-through text-sm">任务失败</span>
+                                    <span className="block text-[10px] text-slate-400">(好人无法失败)</span>
                                 </Button>
                             )}
                         </div>
@@ -900,7 +900,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                {phase === GamePhase.MISSION_EXECUTION && (!selectedTeam.includes(myPlayerId) || players.find(p => p.id === myPlayerId)?.missionAction !== null) && (
                    <div className="text-center space-y-3">
                        <ShieldAlert size={40} className="mx-auto text-amber-600 animate-pulse" />
-                       <p className="text-slate-400 font-cinzel">任務執行中，請保持肅靜...</p>
+                       <p className="text-slate-400 font-cinzel">任务执行中，请保持肃静...</p>
                    </div>
                )}
 
@@ -908,14 +908,14 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                {phase === GamePhase.ASSASSINATION && (
                    iAmAssassin ? (
                        <div className="space-y-3 animate-[slideUp_0.3s]">
-                           <p className="text-center text-sm text-red-300 font-bold">你是刺客：請選擇要刺殺的目標</p>
+                           <p className="text-center text-sm text-red-300 font-bold">你是刺客：请选择要刺杀的目标</p>
                            <div className="grid grid-cols-1 gap-2">
                                <select
                                    value={assassinationTargetId ?? ''}
                                    onChange={(e) => setAssassinationTargetId(e.target.value || null)}
                                    className="w-full px-3 py-2 rounded-lg bg-slate-900/80 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500/40"
                                >
-                                   <option value="">選擇玩家…</option>
+                                   <option value="">选择玩家…</option>
                                    {players
                                        .filter((p) => p.id !== myPlayerId)
                                        .map((p) => (
@@ -933,13 +933,13 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                                    }}
                                    disabled={!assassinationTargetId}
                                >
-                                   確認刺殺
+                                   确认刺杀
                                </Button>
                            </div>
                        </div>
                    ) : (
                        <div className="text-center space-y-2">
-                           <p className="text-slate-400 text-sm">刺客正在做出選擇...</p>
+                           <p className="text-slate-400 text-sm">刺客正在做出选择...</p>
                        </div>
                    )
                )}
@@ -958,7 +958,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
        <button
         className="absolute top-4 left-4 p-2.5 bg-slate-800/90 rounded-full border border-slate-600 text-slate-400 z-50 hover:text-white hover:bg-slate-700 transition-colors shadow-lg"
         onClick={() => {
-            if (confirm('確定要離開遊戲？')) {
+            if (confirm('确定要离开游戏？')) {
                 clearRoomFromUrl();
                 onNavigate(ViewState.HOME);
             }
@@ -971,7 +971,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
        <button
         className={`absolute top-16 right-4 p-2.5 rounded-full border shadow-lg z-50 transition-all ${showVisionOnBoard ? 'bg-amber-600/90 text-white border-amber-400' : 'bg-slate-800/90 text-slate-400 border-slate-600'}`}
         onClick={() => setShowVisionOnBoard(!showVisionOnBoard)}
-        title="切換視野標記"
+        title="切换视野标记"
        >
            {showVisionOnBoard ? <Eye size={18} /> : <EyeOff size={18} />}
        </button>
@@ -982,7 +982,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
         onClick={() => setShowRole(true)}
        >
            <User size={18} />
-           <span className="font-bold text-sm">身份與視野</span>
+               <span className="font-bold text-sm">身份与视野</span>
        </button>
 
        {/* In-Game Role & Vision Modal */}
@@ -998,7 +998,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
 
                     <div className="mt-6 w-full bg-slate-900/90 p-5 rounded-xl border border-slate-600 backdrop-blur-xl shadow-2xl">
                         <h4 className="text-amber-500 font-cinzel text-lg mb-2 border-b border-slate-700 pb-2 flex items-center gap-2">
-                            <Eye size={18} /> 視野情報
+                            <Eye size={18} /> 视野信息
                         </h4>
 
                         <div className="mb-3 flex items-start gap-2 bg-slate-800/50 p-2 rounded text-xs text-slate-300">
@@ -1024,14 +1024,14 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                             })}
                             {!players.some(p => myPlayer && getVisionInfo(myPlayer, p)) && (
                                 <div className="text-center py-4 text-slate-500 italic text-sm">
-                                    此角色沒有可見的特殊身份資訊
+                                    此角色没有可见的特殊身份信息
                                 </div>
                             )}
                         </div>
                     </div>
 
                     <p className="text-slate-500 mt-6 text-sm flex items-center gap-2 animate-pulse">
-                        <User size={14} /> 點擊背景關閉
+                        <User size={14} /> 点击背景关闭
                     </p>
                </div>
            </div>

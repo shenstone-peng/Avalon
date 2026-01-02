@@ -34,11 +34,11 @@ export const HomeView: React.FC<Props> = ({
   const callAuthApi = async (endpoint: '/api/register' | '/api/login') => {
     const name = playerName.trim();
     if (!name) {
-      setAuthMsg('請先輸入名字');
+      setAuthMsg('请先输入名字');
       return;
     }
     if (!password) {
-      setAuthMsg('請輸入密碼');
+      setAuthMsg('请输入密码');
       return;
     }
 
@@ -52,7 +52,7 @@ export const HomeView: React.FC<Props> = ({
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setAuthMsg(data?.message || '操作失敗');
+        setAuthMsg(data?.message || '操作失败');
         return;
       }
       if (data?.token) onAuthSuccess(data.token);
@@ -60,10 +60,10 @@ export const HomeView: React.FC<Props> = ({
         onPlayerNameChange(data.user.name);
       }
       setPassword('');
-      setAuthMsg(endpoint === '/api/register' ? '註冊成功，已登入' : '登入成功');
+      setAuthMsg(endpoint === '/api/register' ? '注册成功，已登录' : '登录成功');
     } catch (e) {
       console.error(e);
-      setAuthMsg('連線失敗，請稍後再試');
+      setAuthMsg('连接失败，请稍后再试');
     } finally {
       setBusy(false);
     }
@@ -77,27 +77,27 @@ export const HomeView: React.FC<Props> = ({
             <Crown size={48} className="text-amber-400" />
         </div>
         <h1 className="font-cinzel text-4xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-200 via-amber-400 to-amber-200 mb-2 drop-shadow-sm">
-          王者圓桌
+          王者圆桌
         </h1>
         <p className="font-cinzel text-amber-600/80 text-sm tracking-[0.3em] uppercase mb-4">
             Project Avalon
         </p>
         <p className="text-slate-400 text-sm max-w-xs mx-auto leading-relaxed">
-          正義與邪惡的終極對決，誰能活著見到聖杯？
+          正义与邪恶的终极对决，谁能活着见到圣杯？
         </p>
       </div>
 
       {/* Nickname */}
       <div className="w-full max-w-sm mb-6 z-20">
-        <label className="block text-xs text-slate-500 uppercase tracking-widest mb-2 text-center">你的暱稱</label>
+        <label className="block text-xs text-slate-500 uppercase tracking-widest mb-2 text-center">你的昵称</label>
         <input
           value={playerName}
           onChange={(e) => onPlayerNameChange(e.target.value)}
           maxLength={20}
-          placeholder="輸入你的名字"
+          placeholder="输入你的名字"
           className="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40"
         />
-        <p className="text-[11px] text-slate-600 mt-2 text-center">加入房間後也可以再修改</p>
+        <p className="text-[11px] text-slate-600 mt-2 text-center">加入房间后也可以再修改</p>
       </div>
 
       {!isAuthed ? (
@@ -105,7 +105,7 @@ export const HomeView: React.FC<Props> = ({
           {pendingRoomCode && (
             <div className="w-full max-w-sm mb-4 z-20">
               <p className="text-xs text-amber-400 text-center">
-                你正在嘗試加入房間 {pendingRoomCode}，請先登入。
+                你正在尝试加入房间 {pendingRoomCode}，请先登录。
               </p>
             </div>
           )}
@@ -118,16 +118,16 @@ export const HomeView: React.FC<Props> = ({
               onChange={(e) => setPassword(e.target.value)}
               type="password"
               maxLength={200}
-              placeholder="至少 6 字元"
+              placeholder="至少 6 字符"
               className="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40"
             />
             {authMsg && <p className="text-[11px] text-slate-400 mt-2 text-center">{authMsg}</p>}
             <div className="mt-3 grid grid-cols-2 gap-3">
               <Button variant="secondary" fullWidth onClick={() => callAuthApi('/api/register')} disabled={busy}>
-                註冊
+                注册
               </Button>
               <Button variant="secondary" fullWidth onClick={() => callAuthApi('/api/login')} disabled={busy}>
-                登入
+                登录
               </Button>
             </div>
           </div>
@@ -135,24 +135,24 @@ export const HomeView: React.FC<Props> = ({
       ) : (
         <div className="w-full max-w-sm mb-6 z-20">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-slate-500 uppercase tracking-widest">已登入</p>
+            <p className="text-xs text-slate-500 uppercase tracking-widest">已登录</p>
             <button className="text-xs text-slate-400 hover:text-slate-200" onClick={onLogout}>
-              登出
+              退出登录
             </button>
           </div>
 
           <div className="space-y-4">
             <Button variant="secondary" fullWidth onClick={onCreateRoom}>
-              <Users size={20} /> 創建房間
+              <Users size={20} /> 创建房间
             </Button>
 
             <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
-              <label className="block text-xs text-slate-500 uppercase tracking-widest mb-2 text-center">加入房間</label>
+              <label className="block text-xs text-slate-500 uppercase tracking-widest mb-2 text-center">加入房间</label>
               <input
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 maxLength={20}
-                placeholder="輸入房間號（例如 AV-1234）"
+                placeholder="输入房间号（例如 AV-1234）"
                 className="w-full px-4 py-3 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40"
               />
               <div className="mt-3">
@@ -179,7 +179,7 @@ export const HomeView: React.FC<Props> = ({
       {/* Main Actions (kept minimal; gameplay entry is gated above) */}
       <div className="w-full max-w-sm space-y-4 z-20">
         <Button variant="secondary" fullWidth onClick={() => onNavigate(ViewState.RULES)}>
-          規則說明
+          规则说明
         </Button>
       </div>
 
@@ -187,7 +187,7 @@ export const HomeView: React.FC<Props> = ({
       <div className="absolute bottom-[calc(6rem+env(safe-area-inset-bottom))] text-center">
          <div className="flex items-center gap-2 text-xs text-slate-600 mb-2">
             <Sparkles size={12} />
-            <span>S1 賽季：亞瑟王的召喚</span>
+          <span>S1 赛季：亚瑟王的召唤</span>
             <Sparkles size={12} />
          </div>
       </div>

@@ -24,9 +24,9 @@ export const RoleCard: React.FC<RoleCardProps> = ({ role, isRevealed, onReveal }
            <div className="w-full h-full border-2 border-dashed border-slate-600 rounded-lg flex flex-col items-center justify-center gap-4">
               <Shield size={64} className="text-slate-500" />
               <h3 className="font-cinzel text-xl text-slate-400 tracking-widest text-center">
-                身份確認<br/>PROJECT AVALON
+                身份确认<br/>PROJECT AVALON
               </h3>
-              <p className="text-slate-500 text-xs mt-8">點擊翻開查看身份</p>
+              <p className="text-slate-500 text-xs mt-8">点击翻开查看身份</p>
            </div>
         </div>
 
@@ -45,7 +45,7 @@ export const RoleCard: React.FC<RoleCardProps> = ({ role, isRevealed, onReveal }
                   {role.name}
                 </h2>
                 <span className={`text-xs uppercase tracking-widest font-bold px-2 py-1 rounded mb-4 ${isGood ? 'bg-blue-900 text-blue-300' : 'bg-red-900 text-red-300'}`}>
-                  {role.alliance === Alliance.GOOD ? '正義陣營' : '邪惡陣營'}
+                  {role.alliance === Alliance.GOOD ? '正义阵营' : '邪恶阵营'}
                 </span>
 
                 <p className="text-sm text-slate-300 leading-relaxed font-serif">
@@ -54,7 +54,7 @@ export const RoleCard: React.FC<RoleCardProps> = ({ role, isRevealed, onReveal }
              </div>
              
              <div className="mt-auto pt-4 border-t border-white/10 w-full">
-                <p className="text-xs text-slate-400">點擊卡片隱藏身份</p>
+                <p className="text-xs text-slate-400">点击卡片隐藏身份</p>
              </div>
           </div>
         </div>

@@ -65,12 +65,12 @@ export interface MissionRound {
 }
 
 export const ROLES_CONFIG: Record<string, Role> = {
-  MERLIN: { type: RoleType.MERLIN, name: '梅林', alliance: Alliance.GOOD, description: '你知道誰是壞人，但必須隱藏身份。' },
-  PERCIVAL: { type: RoleType.PERCIVAL, name: '派西維爾', alliance: Alliance.GOOD, description: '你知道誰是梅林（或莫甘娜），負責保護梅林。' },
-  LOYAL_SERVANT: { type: RoleType.LOYAL_SERVANT, name: '亞瑟的忠臣', alliance: Alliance.GOOD, description: '忠誠的僕人，努力完成任務。' },
-  MORGANA: { type: RoleType.MORGANA, name: '莫甘娜', alliance: Alliance.EVIL, description: '偽裝成梅林，迷惑派西維爾。' },
-  ASSASSIN: { type: RoleType.ASSASSIN, name: '刺客', alliance: Alliance.EVIL, description: '如果好人陣營獲勝，你可以刺殺梅林來逆轉。' },
-  MORDRED: { type: RoleType.MORDRED, name: '莫德雷德', alliance: Alliance.EVIL, description: '梅林看不到你的真實身份。' },
-  OBERON: { type: RoleType.OBERON, name: '奧伯倫', alliance: Alliance.EVIL, description: '你看不到隊友，隊友也看不到你。' },
-  MINION: { type: RoleType.MINION, name: '莫德雷德的爪牙', alliance: Alliance.EVIL, description: '協助邪惡陣營破壞任務。' },
+  MERLIN: { type: RoleType.MERLIN, name: '梅林', alliance: Alliance.GOOD, description: '你知道谁是坏人，但必须隐藏身份。' },
+  PERCIVAL: { type: RoleType.PERCIVAL, name: '派西维尔', alliance: Alliance.GOOD, description: '你知道谁是梅林（或莫甘娜），负责保护梅林。' },
+  LOYAL_SERVANT: { type: RoleType.LOYAL_SERVANT, name: '亚瑟的忠臣', alliance: Alliance.GOOD, description: '忠诚的仆人，努力完成任务。' },
+  MORGANA: { type: RoleType.MORGANA, name: '莫甘娜', alliance: Alliance.EVIL, description: '伪装成梅林，迷惑派西维尔。' },
+  ASSASSIN: { type: RoleType.ASSASSIN, name: '刺客', alliance: Alliance.EVIL, description: '如果好人阵营获胜，你可以刺杀梅林来逆转。' },
+  MORDRED: { type: RoleType.MORDRED, name: '莫德雷德', alliance: Alliance.EVIL, description: '梅林看不到你的真实身份。' },
+  OBERON: { type: RoleType.OBERON, name: '奥伯伦', alliance: Alliance.EVIL, description: '你看不到队友，队友也看不到你。' },
+  MINION: { type: RoleType.MINION, name: '莫德雷德的爪牙', alliance: Alliance.EVIL, description: '协助邪恶阵营破坏任务。' },
 };
