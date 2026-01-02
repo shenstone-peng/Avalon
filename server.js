@@ -100,6 +100,12 @@ const migrateGameSocketId = (game, oldId, newId) => {
   if (game.leaderId === oldId) game.leaderId = newId;
   if (game.assassinationTargetId === oldId) game.assassinationTargetId = newId;
 
+  if (game.ladyOfLakeHolderId === oldId) game.ladyOfLakeHolderId = newId;
+  if (game.ladyOfLakeTargetId === oldId) game.ladyOfLakeTargetId = newId;
+  if (Array.isArray(game.ladyOfLakeHistory)) {
+    game.ladyOfLakeHistory = game.ladyOfLakeHistory.map((id) => (id === oldId ? newId : id));
+  }
+
   if (Array.isArray(game.selectedTeam)) {
     game.selectedTeam = game.selectedTeam.map((id) => (id === oldId ? newId : id));
   }
@@ -446,6 +452,10 @@ const getGamePublicState = (room) => {
     selectedTeam: game.selectedTeam,
     manualWinner: game.manualWinner,
     assassinationTargetId: game.assassinationTargetId ?? null,
+    ladyOfLakeHolderId: game.ladyOfLakeHolderId ?? null,
+    ladyOfLakeHistory: Array.isArray(game.ladyOfLakeHistory) ? game.ladyOfLakeHistory : [],
+    ladyOfLakeTargetId: game.ladyOfLakeTargetId ?? null,
+    ladyOfLakeResult: game.ladyOfLakeResult ?? null,
   };
 };
 
@@ -590,6 +600,10 @@ const startGameForRoom = (room) => {
     proposalAttempt: 1,
     manualWinner: null,
     assassinationTargetId: null,
+    ladyOfLakeHolderId: null,
+    ladyOfLakeHistory: [],
+    ladyOfLakeTargetId: null,
+    ladyOfLakeResult: null,
     players,
     rounds: missionCfg.map((cfg, idx) => ({
       roundNumber: idx + 1,
@@ -601,6 +615,14 @@ const startGameForRoom = (room) => {
       missionResults: [],
     })),
   };
+
+  // Lady of the Lake: initial holder is the player before the first leader (host).
+  const ids = Array.from(room.players.keys());
+  const leaderIdx = ids.indexOf(room.hostId);
+  const initialIdx = (leaderIdx - 1 + ids.length) % ids.length;
+  const initialHolderId = ids[initialIdx];
+  room.game.ladyOfLakeHolderId = initialHolderId;
+  room.game.ladyOfLakeHistory = [initialHolderId];
 };
 
 const allPlayers = (room) => Array.from(room.players.keys());
@@ -649,6 +671,9 @@ const applyForcedApprovalsIfNeeded = (room) => {
   }
 };
 
+const LADY_OF_THE_LAKE_ROUND_INDEXES = [1, 2, 3];
+const AUTO_LADY_OF_THE_LAKE_DELAY_MS = 2200;
+
 const finalizeMissionAndAdvance = (room) => {
   const game = ensureGame(room);
   const round = game.rounds[game.currentRoundIndex];
@@ -663,6 +688,47 @@ const finalizeMissionAndAdvance = (room) => {
   round.missionResults = shuffle(actions);
 
   game.phase = 'MISSION_REVEAL';
+
+  // Auto-enter Lady of the Lake after mission results are revealed (rounds 2/3/4), if game is not ended.
+  if (game._autoLadyTimeout) {
+    try {
+      clearTimeout(game._autoLadyTimeout);
+    } catch {
+      // ignore
+    }
+    game._autoLadyTimeout = null;
+  }
+
+  const { successes, fails } = computeWins(game.rounds);
+  const shouldEnd = successes >= 3 || fails >= 3;
+  const shouldLady = !shouldEnd && LADY_OF_THE_LAKE_ROUND_INDEXES.includes(game.currentRoundIndex);
+
+  if (shouldLady) {
+    const roomCode = room.code;
+    const roundIndex = game.currentRoundIndex;
+    game._autoLadyTimeout = setTimeout(() => {
+      try {
+        const latestRoom = ensureRoom(roomCode);
+        const latestGame = ensureGame(latestRoom);
+
+        // Only transition if we are still showing this round's reveal.
+        if (latestGame.phase !== 'MISSION_REVEAL') return;
+        if (latestGame.currentRoundIndex !== roundIndex) return;
+
+        const latestWins = computeWins(latestGame.rounds);
+        if (latestWins.successes >= 3) return;
+        if (latestWins.fails >= 3) return;
+
+        latestGame.phase = 'LADY_OF_THE_LAKE';
+        latestGame.ladyOfLakeTargetId = null;
+        latestGame.ladyOfLakeResult = null;
+
+        broadcastGameUpdate(latestRoom);
+      } catch {
+        // ignore
+      }
+    }, AUTO_LADY_OF_THE_LAKE_DELAY_MS);
+  }
 };
 
 const computeWins = (rounds) => ({
@@ -670,7 +736,7 @@ const computeWins = (rounds) => ({
   fails: rounds.filter((r) => r.status === 'FAIL').length,
 });
 
-const nextRoundFromReveal = (room) => {
+const nextRoundFromReveal = (room, { skipLadyOfLake = false } = {}) => {
   const game = ensureGame(room);
   const { successes, fails } = computeWins(game.rounds);
   const ids = allPlayers(room);
@@ -683,6 +749,14 @@ const nextRoundFromReveal = (room) => {
 
   if (fails >= 3) {
     setGameOver(room, 'EVIL', 'THREE_MISSIONS_FAILED');
+    return;
+  }
+
+  // Lady of the Lake triggers after missions 2, 3, 4 (round indexes 1,2,3) are revealed.
+  if (!skipLadyOfLake && LADY_OF_THE_LAKE_ROUND_INDEXES.includes(game.currentRoundIndex)) {
+    game.phase = 'LADY_OF_THE_LAKE';
+    game.ladyOfLakeTargetId = null;
+    game.ladyOfLakeResult = null;
     return;
   }
 
@@ -1005,6 +1079,59 @@ io.on('connection', (socket) => {
       if (game.phase !== 'MISSION_REVEAL') return;
       nextRoundFromReveal(room);
       broadcastGameUpdate(room);
+    } catch {
+      // ignore
+    }
+  });
+
+  socket.on('lady_of_the_lake_target', ({ roomCode, targetId }) => {
+    try {
+      const room = ensureRoom(roomCode);
+      const game = ensureGame(room);
+      if (game.phase !== 'LADY_OF_THE_LAKE') return;
+      if (game.ladyOfLakeHolderId !== socket.id) return;
+      if (typeof targetId !== 'string' || !targetId) return;
+      if (!game.players?.[targetId]) return;
+      if (targetId === game.ladyOfLakeHolderId) return;
+
+      const history = Array.isArray(game.ladyOfLakeHistory) ? game.ladyOfLakeHistory : [];
+      if (history.includes(targetId)) return;
+      if (game.ladyOfLakeTargetId) return;
+
+      game.ladyOfLakeTargetId = targetId;
+      game.ladyOfLakeResult = game.players[targetId]?.alliance ?? null;
+
+      broadcastGameUpdate(room);
+
+      const delayMs = 1200;
+      if (game._ladyTimeout) {
+        try {
+          clearTimeout(game._ladyTimeout);
+        } catch {
+          // ignore
+        }
+      }
+
+      game._ladyTimeout = setTimeout(() => {
+        try {
+          const latestRoom = ensureRoom(roomCode);
+          const latestGame = ensureGame(latestRoom);
+          if (latestGame.phase !== 'LADY_OF_THE_LAKE') return;
+          if (latestGame.ladyOfLakeTargetId !== targetId) return;
+
+          latestGame.ladyOfLakeHolderId = targetId;
+          latestGame.ladyOfLakeHistory = Array.isArray(latestGame.ladyOfLakeHistory)
+            ? [...latestGame.ladyOfLakeHistory, targetId]
+            : [targetId];
+          latestGame.ladyOfLakeTargetId = null;
+          latestGame.ladyOfLakeResult = null;
+
+          nextRoundFromReveal(latestRoom, { skipLadyOfLake: true });
+          broadcastGameUpdate(latestRoom);
+        } catch {
+          // ignore
+        }
+      }, delayMs);
     } catch {
       // ignore
     }

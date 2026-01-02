@@ -49,6 +49,7 @@ export type NetGamePhase =
   | 'VOTING'
   | 'MISSION_EXECUTION'
   | 'MISSION_REVEAL'
+  | 'LADY_OF_THE_LAKE'
   | 'ASSASSINATION'
   | 'GAME_OVER';
 
@@ -101,4 +102,8 @@ export interface NetGameState {
   selectedTeam: string[];
   manualWinner: 'GOOD' | 'EVIL' | null;
   assassinationTargetId?: string | null;
+  ladyOfLakeHolderId?: string | null;
+  ladyOfLakeHistory?: string[];
+  ladyOfLakeTargetId?: string | null;
+  ladyOfLakeResult?: 'GOOD' | 'EVIL' | null;
 }

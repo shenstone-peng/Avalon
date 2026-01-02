@@ -1,0 +1,645 @@
+
+import React, { useState, useEffect } from 'react';
+import { ViewState, GamePhase, Player, RoleType, Alliance, ROLES_CONFIG, MissionRound, Role } from '../types';
+import { AVATARS, MISSION_CONFIG_5_PLAYERS } from '../constants';
+import { Button } from '../components/Button';
+import { RoleCard } from '../components/RoleCard';
+import { generateMissionStory, generateEndGameAnalysis } from '../services/geminiService';
+// Added Shield to the lucide-react imports to fix the error in renderLadyOfLake
+import { ScrollText, Swords, XCircle, CheckCircle, Crown, Eye, EyeOff, Gavel, Shield, ShieldAlert, HelpCircle, Skull, User, Info, Waves } from 'lucide-react';
+
+interface Props {
+  onNavigate: (view: ViewState) => void;
+  playerName: string;
+}
+
+export const GameView: React.FC<Props> = ({ onNavigate, playerName }) => {
+  // Game State
+  const [phase, setPhase] = useState<GamePhase>(GamePhase.SETUP);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [myPlayerId, setMyPlayerId] = useState<string>('');
+  const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
+  const [rounds, setRounds] = useState<MissionRound[]>([]);
+  const [leaderIndex, setLeaderIndex] = useState(0);
+  const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
+  const [narrative, setNarrative] = useState<string>('');
+  const [isProcessingAI, setIsProcessingAI] = useState(false);
+  const [showRole, setShowRole] = useState(false);
+  const [showVisionOnBoard, setShowVisionOnBoard] = useState(true);
+  const [manualWinner, setManualWinner] = useState<Alliance | null>(null);
+
+  // Lady of the Lake State
+  const [ladyOfLakeHolderId, setLadyOfLakeHolderId] = useState<string>('');
+  const [ladyOfLakeHistory, setLadyOfLakeHistory] = useState<string[]>([]);
+  const [ladyOfLakeTargetId, setLadyOfLakeTargetId] = useState<string | null>(null);
+  const [ladyOfLakeResult, setLadyOfLakeResult] = useState<Alliance | null>(null);
+
+  // Initialize Game
+  useEffect(() => {
+    initializeGame();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const initializeGame = () => {
+    // 1. Create Players (Simplified to 5 for demo, but mechanic is ready for 10)
+    const newPlayers: Player[] = Array.from({ length: 5 }).map((_, i) => ({
+      id: `p${i}`,
+      name: i === 0 ? playerName : `玩家 ${i + 1}`,
+      isLeader: i === 0,
+      avatar: AVATARS[i % AVATARS.length],
+      isBot: i !== 0,
+      vote: null,
+      missionAction: null
+    }));
+
+    setMyPlayerId(newPlayers[0].id);
+
+    // 2. Assign Roles
+    const roles: Role[] = [
+        ROLES_CONFIG.MERLIN,
+        ROLES_CONFIG.PERCIVAL,
+        ROLES_CONFIG.LOYAL_SERVANT,
+        ROLES_CONFIG.MORGANA,
+        ROLES_CONFIG.ASSASSIN
+    ];
+
+    const shuffledRoles = roles.sort(() => Math.random() - 0.5);
+    newPlayers.forEach((p, i) => {
+        p.role = shuffledRoles[i];
+    });
+
+    setPlayers(newPlayers);
+
+    // 3. Lady of the Lake Setup: Initial holder is the player before the first leader
+    const firstLeaderIndex = 0;
+    const initialLadyIndex = (firstLeaderIndex - 1 + newPlayers.length) % newPlayers.length;
+    const initialHolderId = newPlayers[initialLadyIndex].id;
+    setLadyOfLakeHolderId(initialHolderId);
+    setLadyOfLakeHistory([initialHolderId]);
+
+    // 4. Setup Rounds
+    const newRounds: MissionRound[] = MISSION_CONFIG_5_PLAYERS.map((cfg, i) => ({
+      roundNumber: i + 1,
+      playersRequired: cfg.players,
+      failsRequired: cfg.fails,
+      status: i === 0 ? 'CURRENT' : 'PENDING',
+      selectedTeam: [],
+      votes: {},
+      missionResults: []
+    }));
+    setRounds(newRounds);
+
+    setPhase(GamePhase.ROLE_REVEAL);
+  };
+
+  const getVisionInfo = (observer: Player, target: Player): { icon: React.ReactNode, text: string, type: 'evil' | 'good' | 'unknown' } | null => {
+      if (observer.id === target.id) return null;
+      if (!observer.role || !target.role) return null;
+
+      const obsType = observer.role.type;
+      const targetType = target.role.type;
+      const targetAlliance = target.role.alliance;
+
+      if (obsType === RoleType.MERLIN) {
+          if (targetAlliance === Alliance.EVIL && targetType !== RoleType.MORDRED) {
+              return { icon: <Skull size={16} />, text: '邪惡陣營', type: 'evil' };
+          }
+      }
+
+      if (obsType === RoleType.PERCIVAL) {
+          if (targetType === RoleType.MERLIN || targetType === RoleType.MORGANA) {
+              return { icon: <HelpCircle size={16} />, text: '梅林?', type: 'unknown' };
+          }
+      }
+
+      if (observer.role.alliance === Alliance.EVIL && obsType !== RoleType.OBERON) {
+          if (targetAlliance === Alliance.EVIL && targetType !== RoleType.OBERON) {
+              return { icon: <Skull size={16} />, text: '同夥', type: 'evil' };
+          }
+      }
+
+      return null;
+  };
+
+  const getRoleDescription = (roleType: RoleType) => {
+      switch (roleType) {
+          case RoleType.MERLIN: return "你能看穿大部分邪惡陣營的偽裝（除了莫德雷德）。";
+          case RoleType.PERCIVAL: return "你能看到梅林與莫甘娜，但無法區分誰是真梅林。";
+          case RoleType.OBERON: return "你無法看到你的邪惡隊友，隊友也看不到你。";
+          case RoleType.MORDRED:
+          case RoleType.MORGANA:
+          case RoleType.ASSASSIN:
+          case RoleType.MINION:
+              return "你能看到你的邪惡同夥（除了奧伯倫）。";
+          default: return "你沒有特殊視野，只能依靠信任與邏輯。";
+      }
+  };
+
+  const simulateBotVotes = () => {
+     setPlayers(prev => prev.map(p => {
+         if (p.isBot) {
+             return { ...p, vote: Math.random() > 0.3 ? 'APPROVE' : 'REJECT' };
+         }
+         return p;
+     }));
+  };
+
+  const simulateBotMissionActions = (teamIds: string[]) => {
+      setPlayers(prev => prev.map(p => {
+          if (p.isBot && teamIds.includes(p.id)) {
+              const isEvil = p.role?.alliance === Alliance.EVIL;
+              const action = (isEvil && Math.random() > 0.1) ? 'FAIL' : 'SUCCESS';
+              return { ...p, missionAction: action };
+          }
+          return p;
+      }));
+  };
+
+  const handleTeamSelection = (playerId: string) => {
+      if (phase !== GamePhase.TEAM_SELECTION) return;
+      const currentLeader = players[leaderIndex];
+      if (currentLeader.id !== myPlayerId) return;
+
+      const required = rounds[currentRoundIndex].playersRequired;
+
+      setSelectedTeam(prev => {
+          if (prev.includes(playerId)) {
+              return prev.filter(id => id !== playerId);
+          }
+          if (prev.length < required) {
+              return [...prev, playerId];
+          }
+          return prev;
+      });
+  };
+
+  const submitTeam = () => {
+      setPhase(GamePhase.VOTING);
+      setPlayers(prev => prev.map(p => ({...p, vote: null})));
+      setTimeout(() => simulateBotVotes(), 1000);
+  };
+
+  const handleVote = (vote: 'APPROVE' | 'REJECT') => {
+      setPlayers(prev => prev.map(p => p.id === myPlayerId ? { ...p, vote } : p));
+  };
+
+  useEffect(() => {
+      if (phase === GamePhase.VOTING) {
+          const allVoted = players.every(p => p.vote !== null);
+          if (allVoted) {
+              setTimeout(finalizeVotes, 1500);
+          }
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [players, phase]);
+
+  const finalizeVotes = () => {
+      const approves = players.filter(p => p.vote === 'APPROVE').length;
+      const rejects = players.filter(p => p.vote === 'REJECT').length;
+
+      if (approves > rejects) {
+          setPhase(GamePhase.MISSION_EXECUTION);
+          setPlayers(prev => prev.map(p => ({ ...p, missionAction: null })));
+          simulateBotMissionActions(selectedTeam);
+      } else {
+          setPhase(GamePhase.TEAM_SELECTION);
+          setLeaderIndex((leaderIndex + 1) % players.length);
+          setSelectedTeam([]);
+      }
+  };
+
+  const handleMissionAction = (action: 'SUCCESS' | 'FAIL') => {
+      setPlayers(prev => prev.map(p => p.id === myPlayerId ? { ...p, missionAction: action } : p));
+  };
+
+   useEffect(() => {
+    if (phase === GamePhase.MISSION_EXECUTION) {
+        const teamPlayers = players.filter(p => selectedTeam.includes(p.id));
+        const allActed = teamPlayers.every(p => p.missionAction !== null);
+        if (allActed && teamPlayers.length > 0) {
+            setTimeout(finalizeMission, 1500);
+        }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [players, phase]);
+
+    const finalizeMission = async () => {
+        const teamActions = players
+            .filter(p => selectedTeam.includes(p.id))
+            .map(p => p.missionAction as 'SUCCESS' | 'FAIL');
+
+        const failCount = teamActions.filter(a => a === 'FAIL').length;
+        const requiredFails = rounds[currentRoundIndex].failsRequired;
+        const isSuccess = failCount < requiredFails;
+
+        setIsProcessingAI(true);
+        const teamObjs = players.filter(p => selectedTeam.includes(p.id));
+        const currentRound = { ...rounds[currentRoundIndex], missionResults: teamActions };
+
+        const story = await generateMissionStory(currentRound, teamObjs, isSuccess);
+        setNarrative(story);
+        setIsProcessingAI(false);
+
+        setRounds(prev => prev.map((r, i) => {
+            if (i === currentRoundIndex) {
+                return { ...r, status: isSuccess ? 'SUCCESS' : 'FAIL', missionResults: teamActions };
+            }
+            if (i === currentRoundIndex + 1) {
+                return { ...r, status: 'CURRENT' };
+            }
+            return r;
+        }));
+
+        setPhase(GamePhase.MISSION_REVEAL);
+    };
+
+    const nextRound = () => {
+        const successes = rounds.filter(r => r.status === 'SUCCESS').length;
+        const fails = rounds.filter(r => r.status === 'FAIL').length;
+
+        if (successes >= 3) {
+            setPhase(GamePhase.ASSASSINATION);
+            setManualWinner(null);
+            return;
+        }
+
+        if (fails >= 3) {
+            setManualWinner(Alliance.EVIL);
+            setPhase(GamePhase.GAME_OVER);
+            return;
+        }
+
+        // Check for Lady of the Lake: Usually rounds 2, 3, 4 (indices 1, 2, 3)
+        const ladyRounds = [1, 2, 3];
+        if (ladyRounds.includes(currentRoundIndex)) {
+            setPhase(GamePhase.LADY_OF_THE_LAKE);
+            setLadyOfLakeTargetId(null);
+            setLadyOfLakeResult(null);
+            return;
+        }
+
+        proceedToNextRoundState();
+    };
+
+    const proceedToNextRoundState = () => {
+        if (currentRoundIndex < 4) {
+            setCurrentRoundIndex(prev => prev + 1);
+            setPhase(GamePhase.TEAM_SELECTION);
+            setSelectedTeam([]);
+            setLeaderIndex((leaderIndex + 1) % players.length);
+            setNarrative('');
+        }
+    };
+
+    const handleManualEndGame = async (winner: Alliance) => {
+        setManualWinner(winner);
+        setPhase(GamePhase.GAME_OVER);
+
+        setIsProcessingAI(true);
+        const analysis = await generateEndGameAnalysis(
+            winner === Alliance.GOOD ? "正義陣營 (藍方)" : "邪惡陣營 (紅方)",
+            players,
+            rounds
+        );
+        setNarrative(analysis);
+        setIsProcessingAI(false);
+    };
+
+    const handleLadyOfLakeCheck = (targetId: string) => {
+        const target = players.find(p => p.id === targetId);
+        if (!target) return;
+
+        setLadyOfLakeTargetId(targetId);
+        setLadyOfLakeResult(target.role?.alliance || Alliance.GOOD);
+    };
+
+    const confirmLadyOfLakeTransfer = () => {
+        if (!ladyOfLakeTargetId) return;
+
+        setLadyOfLakeHolderId(ladyOfLakeTargetId);
+        setLadyOfLakeHistory(prev => [...prev, ladyOfLakeTargetId]);
+
+        // After transfer, move to next round
+        proceedToNextRoundState();
+    };
+
+  // -- Render Helpers --
+
+  const renderLadyOfLake = () => {
+      const isMeHolder = ladyOfLakeHolderId === myPlayerId;
+      const holder = players.find(p => p.id === ladyOfLakeHolderId);
+      const target = players.find(p => p.id === ladyOfLakeTargetId);
+
+      return (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center animate-[fadeIn_0.5s]">
+            <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(37,99,235,0.5)]">
+                <Waves size={40} className="text-white" />
+            </div>
+
+            <h2 className="text-3xl font-cinzel font-bold text-blue-400 mb-2">湖中仙女的啟示</h2>
+
+            {!ladyOfLakeTargetId ? (
+                <div className="max-w-md w-full">
+                    <p className="text-slate-300 mb-8">
+                        {isMeHolder ? "你是湖中仙女的持有者。請選擇一名未曾持有過令牌的玩家，窺視其真實靈魂。" : `等待持有者 ${holder?.name} 選擇窺視目標...`}
+                    </p>
+
+                    {isMeHolder && (
+                        <div className="grid grid-cols-2 gap-4">
+                            {players.filter(p => !ladyOfLakeHistory.includes(p.id)).map(p => (
+                                <button
+                                    key={p.id}
+                                    onClick={() => handleLadyOfLakeCheck(p.id)}
+                                    className="bg-slate-800 border-2 border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 hover:border-blue-500 transition-all active:scale-95"
+                                >
+                                    <img src={p.avatar} className="w-12 h-12 rounded-full border border-slate-600" alt="" />
+                                    <span className="font-bold text-slate-200">{p.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="max-w-md w-full animate-[popIn_0.4s]">
+                    <div className="bg-slate-900 border border-slate-700 p-8 rounded-2xl shadow-2xl mb-8 relative overflow-hidden">
+                        <div className="absolute inset-0 opacity-10 bg-gradient-to-b from-blue-500 to-transparent"></div>
+                        <img src={target?.avatar} className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-slate-800" alt="" />
+                        <h3 className="text-xl font-bold text-white mb-6">目標：{target?.name}</h3>
+
+                        {isMeHolder ? (
+                            <div className={`py-4 px-6 rounded-full font-bold text-xl inline-flex items-center gap-3 shadow-lg border-2
+                                ${ladyOfLakeResult === Alliance.GOOD ? 'bg-blue-900/50 border-blue-400 text-blue-300' : 'bg-red-900/50 border-red-500 text-red-300'}
+                            `}>
+                                {ladyOfLakeResult === Alliance.GOOD ? <Shield size={24} /> : <Skull size={24} />}
+                                陣營：{ladyOfLakeResult === Alliance.GOOD ? '正義' : '邪惡'}
+                            </div>
+                        ) : (
+                            <div className="py-4 px-6 rounded-full bg-slate-800 border border-slate-700 text-slate-400 italic">
+                                身份已揭曉給持有者
+                            </div>
+                        )}
+
+                        <p className="mt-6 text-sm text-slate-400">
+                            湖中仙女現在將傳遞給 {target?.name}。
+                        </p>
+                    </div>
+
+                    {isMeHolder && (
+                        <Button variant="gold" fullWidth onClick={confirmLadyOfLakeTransfer}>
+                            確認並移交令牌
+                        </Button>
+                    )}
+                </div>
+            )}
+        </div>
+      );
+  };
+
+  const renderRoleReveal = () => {
+      const myPlayer = players.find(p => p.id === myPlayerId);
+      if (!myPlayer) return null;
+
+      const visionList = players
+        .map(p => ({ player: p, info: getVisionInfo(myPlayer, p) }))
+        .filter(item => item.info !== null);
+
+      return (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4 animate-[fadeIn_0.5s]">
+            <h2 className="text-2xl font-cinzel text-amber-500 mb-6">確認你的身份</h2>
+            <div className="flex flex-col md:flex-row items-center gap-8 max-w-5xl w-full justify-center">
+                <div className="flex-shrink-0 transform hover:scale-105 transition-transform duration-300">
+                    <RoleCard
+                        role={myPlayer.role || ROLES_CONFIG.LOYAL_SERVANT}
+                        isRevealed={showRole}
+                        onReveal={() => setShowRole(!showRole)}
+                    />
+                </div>
+                <div className={`w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl transition-all duration-500 ${showRole ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none'}`}>
+                    <h3 className="font-cinzel text-xl text-slate-300 mb-2 flex items-center gap-2 border-b border-slate-700 pb-3">
+                        <Eye size={24} className="text-amber-500" />
+                        <span>視野情報</span>
+                    </h3>
+                    <p className="text-sm text-slate-400 mb-4 italic">
+                        {myPlayer.role ? getRoleDescription(myPlayer.role.type) : ''}
+                    </p>
+                    {visionList.length > 0 ? (
+                        <div className="space-y-4">
+                            {visionList.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full border border-slate-500 overflow-hidden">
+                                            <img src={item.player.avatar} className="w-full h-full object-cover" alt="" />
+                                        </div>
+                                        <span className="text-base text-slate-200 font-medium">{item.player.name}</span>
+                                    </div>
+                                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold shadow-sm ${item.info?.type === 'evil' ? 'bg-red-950 text-red-400 border border-red-900' : 'bg-amber-950 text-amber-400 border border-amber-900'}`}>
+                                        {item.info?.icon} {item.info?.text}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 bg-slate-800/50 rounded-lg border border-slate-800 border-dashed">
+                            <Eye size={32} className="text-slate-600 mx-auto mb-2" />
+                            <p className="text-slate-500 italic">你的視野一片漆黑...</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="mt-10">
+                <Button variant="gold" onClick={() => setPhase(GamePhase.TEAM_SELECTION)} disabled={!showRole} className="px-12 text-lg">
+                    {showRole ? '進入遊戲' : '請翻開卡片查看身份'}
+                </Button>
+            </div>
+        </div>
+      );
+  };
+
+  const renderMissionReveal = () => (
+    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-[fadeIn_0.5s]">
+        {isProcessingAI ? (
+             <div className="animate-pulse flex flex-col items-center gap-4">
+                 <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                 <p className="font-cinzel text-xl text-amber-400 tracking-widest">吟遊詩人正在撰寫史詩...</p>
+             </div>
+        ) : phase === GamePhase.GAME_OVER ? (
+            <div className="max-w-lg w-full relative">
+                <div className="mb-6 animate-[bounce_1s]">
+                    {manualWinner === Alliance.GOOD ? <Crown size={80} className="text-blue-400 mx-auto shadow-blue-500" /> : <Skull size={80} className="text-red-500 mx-auto shadow-red-500" />}
+                </div>
+                <h2 className={`text-6xl font-cinzel font-bold mb-2 ${manualWinner === Alliance.GOOD ? 'text-blue-400' : 'text-red-500'}`}>
+                    {manualWinner === Alliance.GOOD ? '正義獲勝' : '邪惡獲勝'}
+                </h2>
+                <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 shadow-2xl mb-8 max-h-60 overflow-y-auto">
+                    <p className="font-serif text-slate-300 italic text-lg leading-relaxed text-left">
+                        {narrative || "歷史已經蓋棺論定。"}
+                    </p>
+                </div>
+                <Button variant="gold" fullWidth onClick={() => onNavigate(ViewState.HOME)}>返回主頁</Button>
+            </div>
+        ) : (
+            <div className="max-w-md w-full">
+                <h2 className={`text-5xl font-cinzel font-bold mb-8 ${rounds[currentRoundIndex].status === 'SUCCESS' ? 'text-blue-400' : 'text-red-500'}`}>
+                    {rounds[currentRoundIndex].status === 'SUCCESS' ? '任務成功' : '任務失敗'}
+                </h2>
+                <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 shadow-2xl mb-8">
+                    <div className="flex justify-center gap-4 mb-8">
+                        {rounds[currentRoundIndex].missionResults.map((res, i) => (
+                            <div key={i} className={`p-4 rounded-full border-2 ${res === 'SUCCESS' ? 'bg-blue-950 border-blue-800 text-blue-400' : 'bg-red-950 border-red-800 text-red-400'}`}>
+                                {res === 'SUCCESS' ? <CheckCircle size={32} /> : <XCircle size={32} />}
+                            </div>
+                        ))}
+                    </div>
+                    <p className="font-serif text-slate-300 italic text-lg leading-relaxed">"{narrative}"</p>
+                </div>
+                <Button variant="gold" fullWidth onClick={nextRound}>
+                    {rounds.filter(r => r.status === 'SUCCESS').length >= 3 || rounds.filter(r => r.status === 'FAIL').length >= 3 ? '查看最終結果' : '下一回合'}
+                </Button>
+            </div>
+        )}
+    </div>
+  );
+
+  const getPlayerPosition = (index: number, total: number) => {
+      const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
+      const radius = 130;
+      return {
+          left: `calc(50% + ${Math.cos(angle) * radius}px)`,
+          top: `calc(40% + ${Math.sin(angle) * radius}px)`
+      };
+  };
+
+  const myPlayer = players.find(p => p.id === myPlayerId);
+  if (phase === GamePhase.ROLE_REVEAL) return renderRoleReveal();
+  if (phase === GamePhase.LADY_OF_THE_LAKE) return renderLadyOfLake();
+
+  return (
+    <div className="h-full flex flex-col relative overflow-hidden bg-slate-950">
+       {/* Top Bar */}
+       <div className="pt-4 px-2 pb-2 bg-slate-900/90 border-b border-slate-800 z-20 shadow-lg">
+           <div className="flex justify-center gap-3">
+               {rounds.map((r, i) => (
+                   <div key={i} className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all relative
+                        ${r.status === 'SUCCESS' ? 'bg-blue-600 border-blue-400 text-white' :
+                          r.status === 'FAIL' ? 'bg-red-600 border-red-400 text-white' :
+                          r.status === 'CURRENT' ? 'bg-amber-500/20 border-amber-500 text-amber-500 animate-pulse' :
+                          'bg-slate-800 border-slate-700 text-slate-600'
+                        }
+                   `}>
+                       {r.status === 'SUCCESS' ? <CheckCircle size={16} /> :
+                        r.status === 'FAIL' ? <XCircle size={16} /> :
+                        r.playersRequired}
+                   </div>
+               ))}
+           </div>
+       </div>
+
+       {/* Board */}
+       <div className="flex-1 relative mt-4">
+           {/* Center Status */}
+           <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full border-4 border-amber-900/50 bg-slate-900/80 flex flex-col items-center justify-center text-center p-4 z-0">
+               {phase === GamePhase.TEAM_SELECTION && (
+                   <>
+                        <Swords size={32} className="text-amber-600 mb-2 animate-pulse" />
+                        <span className="text-amber-200 text-sm font-cinzel">等待隊長<br/>選擇隊伍</span>
+                   </>
+               )}
+               {phase === GamePhase.VOTING && (
+                   <>
+                        <Gavel size={32} className="text-slate-300 mb-2 animate-bounce" />
+                        <span className="text-white font-bold text-lg">全員投票中</span>
+                   </>
+               )}
+           </div>
+
+           {/* Players */}
+           {players.map((p, i) => {
+               const pos = getPlayerPosition(i, players.length);
+               const isSelected = selectedTeam.includes(p.id);
+               const isLeader = i === leaderIndex;
+               const isLadyHolder = p.id === ladyOfLakeHolderId;
+               const visionInfo = myPlayer ? getVisionInfo(myPlayer, p) : null;
+
+               return (
+                   <div
+                        key={p.id}
+                        className={`absolute w-20 h-20 transition-all duration-300 -translate-x-1/2 -translate-y-1/2 cursor-pointer z-10 ${isSelected ? 'scale-110' : ''}`}
+                        style={pos}
+                        onClick={() => handleTeamSelection(p.id)}
+                   >
+                        <div className={`w-full h-full rounded-full border-2 overflow-hidden relative bg-slate-800
+                             ${isSelected ? 'border-amber-400 ring-4 ring-amber-400/30' : 'border-slate-600'}
+                             ${isLeader ? 'ring-2 ring-purple-500 border-purple-400' : ''}
+                        `}>
+                             <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" />
+
+                             {visionInfo && showVisionOnBoard && (
+                                 <div className={`absolute inset-0 flex items-center justify-center bg-black/60 border-2 rounded-full ${visionInfo.type === 'evil' ? 'border-red-500' : 'border-amber-400'}`}>
+                                     {visionInfo.type === 'evil' && <Skull size={24} className="text-red-500 animate-pulse" />}
+                                     {visionInfo.type === 'unknown' && <HelpCircle size={24} className="text-amber-400" />}
+                                 </div>
+                             )}
+                        </div>
+
+                        {isLadyHolder && (
+                            <div className="absolute -top-6 -right-2 bg-blue-600 p-1.5 rounded-full border-2 border-slate-900 shadow-lg animate-bounce z-20">
+                                <Waves size={14} className="text-white" />
+                            </div>
+                        )}
+
+                        {isLeader && (
+                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-purple-400 z-20">
+                                <Crown size={24} fill="currentColor" />
+                            </div>
+                        )}
+
+                        <div className={`absolute top-full left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] whitespace-nowrap mt-2 border font-bold ${p.id === myPlayerId ? 'bg-amber-600 border-amber-400 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}>
+                            {p.name}
+                        </div>
+                   </div>
+               );
+           })}
+       </div>
+
+       {/* Actions Bar */}
+       <div className="bg-slate-900/90 backdrop-blur-lg border-t border-slate-700 p-4 pb-safe z-30 min-h-[160px] flex flex-col justify-center">
+           <div className="max-w-md mx-auto w-full">
+               {phase === GamePhase.TEAM_SELECTION && players[leaderIndex].id === myPlayerId && (
+                   <div className="flex flex-col gap-3">
+                       <p className="text-center text-sm text-amber-500 font-bold flex items-center justify-center gap-2">
+                           你是隊長，請選擇 {rounds[currentRoundIndex].playersRequired} 名隊員
+                       </p>
+                       <Button variant="gold" fullWidth onClick={submitTeam} disabled={selectedTeam.length !== rounds[currentRoundIndex].playersRequired}>
+                           確認派出 ({selectedTeam.length}/{rounds[currentRoundIndex].playersRequired})
+                       </Button>
+                   </div>
+               )}
+               {phase === GamePhase.VOTING && players.find(p => p.id === myPlayerId)?.vote === null && (
+                   <div className="grid grid-cols-2 gap-4">
+                       <Button variant="primary" onClick={() => handleVote('APPROVE')}>贊成出發</Button>
+                       <Button variant="danger" onClick={() => handleVote('REJECT')}>否決提案</Button>
+                   </div>
+               )}
+               {phase === GamePhase.MISSION_EXECUTION && selectedTeam.includes(myPlayerId) && players.find(p => p.id === myPlayerId)?.missionAction === null && (
+                   <div className="grid grid-cols-2 gap-4">
+                        <Button variant="primary" onClick={() => handleMissionAction('SUCCESS')} className="h-16">任務成功</Button>
+                        {players.find(p => p.id === myPlayerId)?.role?.alliance === Alliance.EVIL ? (
+                            <Button variant="danger" onClick={() => handleMissionAction('FAIL')} className="h-16">任務失敗</Button>
+                        ) : (
+                            <Button variant="secondary" disabled className="h-16 opacity-40">任務失敗</Button>
+                        )}
+                   </div>
+               )}
+           </div>
+       </div>
+
+       {(phase === GamePhase.MISSION_REVEAL || phase === GamePhase.GAME_OVER) && renderMissionReveal()}
+       {showRole && (
+           <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-4" onClick={() => setShowRole(false)}>
+               <RoleCard role={myPlayer?.role || ROLES_CONFIG.LOYAL_SERVANT} isRevealed={true} />
+               <p className="text-slate-500 mt-6 text-sm">點擊背景關閉</p>
+           </div>
+       )}
+    </div>
+  );
+};
