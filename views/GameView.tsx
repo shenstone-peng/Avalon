@@ -4,7 +4,7 @@ import { AVATARS, MISSION_CONFIG_5_PLAYERS } from '../constants';
 import { Button } from '../components/Button';
 import { RoleCard } from '../components/RoleCard';
 import { generateMissionStory, generateEndGameAnalysis } from '../services/geminiService';
-import { ScrollText, Swords, XCircle, CheckCircle, Crown, Eye, EyeOff, Gavel, ShieldAlert, HelpCircle, Skull, User, Info } from 'lucide-react';
+import { ScrollText, Swords, XCircle, CheckCircle, Crown, Eye, EyeOff, Gavel, ShieldAlert, HelpCircle, Skull, User, Info, Waves } from 'lucide-react';
 import { getSocket, NetGameState } from '../services/socket';
 
 interface Props {
@@ -32,6 +32,12 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     const [roleAcked, setRoleAcked] = useState(false);
     const [netError, setNetError] = useState<string | null>(null);
     const [assassinationTargetId, setAssassinationTargetId] = useState<string | null>(null);
+
+    // Lady of the Lake state (server-authoritative)
+    const [ladyOfLakeHolderId, setLadyOfLakeHolderId] = useState<string>('');
+    const [ladyOfLakeHistory, setLadyOfLakeHistory] = useState<string[]>([]);
+    const [ladyOfLakeTargetId, setLadyOfLakeTargetId] = useState<string | null>(null);
+    const [ladyOfLakeResult, setLadyOfLakeResult] = useState<'GOOD' | 'EVIL' | null>(null);
 
     const clearRoomFromUrl = () => {
         try {
@@ -88,6 +94,11 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
             setSelectedTeam(state.selectedTeam);
             setAssassinationTargetId((state as any).assassinationTargetId ?? null);
 
+            setLadyOfLakeHolderId((state as any).ladyOfLakeHolderId ?? '');
+            setLadyOfLakeHistory(Array.isArray((state as any).ladyOfLakeHistory) ? (state as any).ladyOfLakeHistory : []);
+            setLadyOfLakeTargetId((state as any).ladyOfLakeTargetId ?? null);
+            setLadyOfLakeResult((state as any).ladyOfLakeResult ?? null);
+
             // Phase mapping
             const phaseMap: Record<string, GamePhase> = {
                 ROLE_REVEAL: GamePhase.ROLE_REVEAL,
@@ -95,6 +106,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                 VOTING: GamePhase.VOTING,
                 MISSION_EXECUTION: GamePhase.MISSION_EXECUTION,
                 MISSION_REVEAL: GamePhase.MISSION_REVEAL,
+                LADY_OF_THE_LAKE: GamePhase.LADY_OF_THE_LAKE,
                 ASSASSINATION: GamePhase.ASSASSINATION,
                 GAME_OVER: GamePhase.GAME_OVER,
             };
@@ -212,6 +224,11 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     socket.emit('mission_action', { roomCode, action });
   };
 
+    const handleLadyOfLakeTarget = (targetId: string) => {
+        if (!roomCode) return;
+        socket.emit('lady_of_the_lake_target', { roomCode, targetId });
+    };
+
   const nextRound = async () => {
     if (!roomCode) return;
     // Optional local story generation (cosmetic). In multiplayer, every client can generate its own.
@@ -251,6 +268,73 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     };
 
   // -- Render Helpers --
+
+  const renderLadyOfLake = () => {
+      const isMeHolder = ladyOfLakeHolderId === myPlayerId;
+      const holder = players.find(p => p.id === ladyOfLakeHolderId);
+      const target = players.find(p => p.id === ladyOfLakeTargetId);
+
+      return (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center animate-[fadeIn_0.5s]">
+            <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(37,99,235,0.5)]">
+                <Waves size={40} className="text-white" />
+            </div>
+
+            <h2 className="text-3xl font-cinzel font-bold text-blue-400 mb-2">湖中仙女的啟示</h2>
+
+            {!ladyOfLakeTargetId ? (
+                <div className="max-w-md w-full">
+                    <p className="text-slate-300 mb-8">
+                        {isMeHolder ? '你是湖中仙女的持有者。請選擇一名未曾持有過令牌的玩家，窺視其陣營。' : `等待持有者 ${holder?.name || '玩家'} 選擇窺視目標...`}
+                    </p>
+
+                    {isMeHolder && (
+                        <div className="grid grid-cols-2 gap-4">
+                            {players
+                              .filter(p => p.id !== myPlayerId)
+                              .filter(p => !ladyOfLakeHistory.includes(p.id))
+                              .map(p => (
+                                <button
+                                    key={p.id}
+                                    onClick={() => handleLadyOfLakeTarget(p.id)}
+                                    className="bg-slate-800 border-2 border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 hover:border-blue-500 transition-all active:scale-95"
+                                >
+                                    <img src={p.avatar} className="w-14 h-14 rounded-full border-2 border-slate-700" alt="" />
+                                    <span className="text-slate-200 font-bold text-sm">{p.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="max-w-md w-full animate-[popIn_0.4s]">
+                    <div className="bg-slate-900 border border-slate-700 p-8 rounded-2xl shadow-2xl mb-8 relative overflow-hidden">
+                        <div className="absolute inset-0 opacity-10 bg-gradient-to-b from-blue-500 to-transparent"></div>
+                        <img src={target?.avatar} className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-slate-800" alt="" />
+                        <h3 className="text-xl font-bold text-white mb-6">目標：{target?.name}</h3>
+
+                        {isMeHolder ? (
+                            <div className={`py-4 px-6 rounded-full font-bold text-xl inline-flex items-center gap-3 shadow-lg border-2
+                                ${ladyOfLakeResult === 'GOOD' ? 'bg-blue-900/50 border-blue-400 text-blue-300' : 'bg-red-900/50 border-red-500 text-red-300'}
+                            `}>
+                                <Waves size={20} />
+                                {ladyOfLakeResult === 'GOOD' ? '正義陣營' : '邪惡陣營'}
+                            </div>
+                        ) : (
+                            <div className="py-4 px-6 rounded-full bg-slate-800 border border-slate-700 text-slate-400 italic">
+                                你無法得知其陣營…
+                            </div>
+                        )}
+
+                        <p className="mt-6 text-sm text-slate-400">
+                            令牌將自動移交給 {target?.name}。
+                        </p>
+                    </div>
+                </div>
+            )}
+        </div>
+      );
+  };
 
   const renderRoleReveal = () => {
       const myPlayer = players.find(p => p.id === myPlayerId);
@@ -456,6 +540,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
     const myPlayer = players.find(p => p.id === myPlayerId);
     const amHost = Boolean(myPlayer?.isHost);
   if (phase === GamePhase.ROLE_REVEAL) return renderRoleReveal();
+    if (phase === GamePhase.LADY_OF_THE_LAKE) return renderLadyOfLake();
 
   const isStateReady = players.length > 0 && rounds.length > 0 && phase !== GamePhase.SETUP;
   if (!isStateReady) {
@@ -560,6 +645,7 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                const isSelected = selectedTeam.includes(p.id);
                const isLeader = i === leaderIndex;
                const isMe = p.id === myPlayerId;
+               const isLadyHolder = p.id === ladyOfLakeHolderId;
                const currentRound = rounds[currentRoundIndex];
                const roundVote = currentRound?.votes?.[p.id] ?? p.vote ?? null;
                const allVotesIn = Boolean(currentRound && players.length > 0 && players.every((pp) => Boolean(currentRound.votes?.[pp.id])));
@@ -613,6 +699,13 @@ export const GameView: React.FC<Props> = ({ onNavigate, playerName, initialRoomC
                         {isLeader && (
                             <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-purple-400 drop-shadow-[0_2px_10px_rgba(168,85,247,0.8)] z-20">
                                 <Crown size={24} fill="currentColor" strokeWidth={1} />
+                            </div>
+                        )}
+
+                        {/* Lady of the Lake marker */}
+                        {isLadyHolder && (
+                            <div className="absolute -top-6 -right-2 bg-blue-600 p-1.5 rounded-full border-2 border-slate-900 shadow-lg z-20">
+                                <Waves size={18} className="text-white" />
                             </div>
                         )}
 
